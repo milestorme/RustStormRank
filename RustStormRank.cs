@@ -31,6 +31,7 @@ namespace Oxide.Plugins
         private Timer _cleanupTimer;
         private Timer _dailyDiscordTimer;
         private DateTime _lastDailyDiscordPostUtc = DateTime.MinValue;
+        private string _lastDailyDiscordPostSlotKey = string.Empty;
 
         private const string DataFileName = "RustStormRank_Data";
         private const string ArchiveFilePrefix = "RustStormRank_Archive_";
@@ -1942,18 +1943,23 @@ namespace Oxide.Plugins
 
                 var now = GetDailyPostNow();
                 var scheduledToday = new DateTime(now.Year, now.Month, now.Day, _config.Discord.DailyPost.PostHour, _config.Discord.DailyPost.PostMinute, 0);
-
-                if (_lastDailyDiscordPostUtc.Date == now.Date)
-                    return;
-
-                if (now < scheduledToday)
-                    return;
-
                 var category = NormalizeWebhookCategory(_config.Discord.DailyPost.Category);
                 var scope = _config.Discord.DailyPost.Scope != null &&
                             _config.Discord.DailyPost.Scope.Equals("lifetime", StringComparison.OrdinalIgnoreCase)
                     ? RankScope.Lifetime
                     : RankScope.CurrentWipe;
+
+                var slotKey = scheduledToday.ToString("yyyy-MM-dd HH:mm") + "|" + category + "|" + scope;
+
+                if (string.Equals(_lastDailyDiscordPostSlotKey, slotKey, StringComparison.Ordinal))
+                    return;
+
+                if (now < scheduledToday)
+                    return;
+
+                if (_lastDailyDiscordPostUtc != DateTime.MinValue &&
+                    (DateTime.UtcNow - _lastDailyDiscordPostUtc).TotalMinutes < 10d)
+                    return;
 
                 var cacheCategory = category == "team"
                     ? (scope == RankScope.Lifetime ? "team_lifetime" : "team")
@@ -1965,9 +1971,10 @@ namespace Oxide.Plugins
                     return;
 
                 PostDiscordSummary(category, scope);
-                _lastDailyDiscordPostUtc = now;
+                _lastDailyDiscordPostUtc = DateTime.UtcNow;
+                _lastDailyDiscordPostSlotKey = slotKey;
 
-                Puts($"[{Name}] Daily Discord leaderboard posted ({category}, {scope}) at {now:HH:mm:ss} {_config.Discord.DailyPost.TimeZoneId}.");
+                Puts($"[{Name}] Daily Discord leaderboard posted ({category}, {scope}) for slot {slotKey}.");
             }
             catch (Exception ex)
             {
