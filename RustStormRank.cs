@@ -171,27 +171,25 @@ namespace Oxide.Plugins
 
                 var victimPlayer = entity as BasePlayer;
                 var attackerPlayer = info.InitiatorPlayer;
+
+                if (!IsValidPlayer(victimPlayer) || !IsValidPlayer(attackerPlayer) || attackerPlayer == victimPlayer)
+                    return;
+
                 var totalDamage = info.damageTypes != null ? info.damageTypes.Total() : 0f;
                 if (totalDamage <= 0f)
                     return;
 
-                if (IsValidPlayer(victimPlayer))
-                {
-                    var victimRecord = GetOrCreatePlayerRecord(victimPlayer.userID, victimPlayer.displayName);
-                    victimRecord.IsNpc = victimPlayer.IsNpc;
-                    victimRecord.CurrentWipe.PvP.DamageTaken += totalDamage;
-                    victimRecord.Lifetime.PvP.DamageTaken += totalDamage;
-                    MarkPlayerDirty(victimPlayer.userID);
-                }
+                var victimRecord = GetOrCreatePlayerRecord(victimPlayer.userID, victimPlayer.displayName);
+                victimRecord.IsNpc = victimPlayer.IsNpc;
+                victimRecord.CurrentWipe.PvP.DamageTaken += totalDamage;
+                victimRecord.Lifetime.PvP.DamageTaken += totalDamage;
+                MarkPlayerDirty(victimPlayer.userID);
 
-                if (IsValidPlayer(attackerPlayer) && attackerPlayer != victimPlayer)
-                {
-                    var attackerRecord = GetOrCreatePlayerRecord(attackerPlayer.userID, attackerPlayer.displayName);
-                    attackerRecord.IsNpc = attackerPlayer.IsNpc;
-                    attackerRecord.CurrentWipe.PvP.DamageDealt += totalDamage;
-                    attackerRecord.Lifetime.PvP.DamageDealt += totalDamage;
-                    MarkPlayerDirty(attackerPlayer.userID);
-                }
+                var attackerRecord = GetOrCreatePlayerRecord(attackerPlayer.userID, attackerPlayer.displayName);
+                attackerRecord.IsNpc = attackerPlayer.IsNpc;
+                attackerRecord.CurrentWipe.PvP.DamageDealt += totalDamage;
+                attackerRecord.Lifetime.PvP.DamageDealt += totalDamage;
+                MarkPlayerDirty(attackerPlayer.userID);
             }
             catch (Exception ex)
             {
@@ -208,23 +206,28 @@ namespace Oxide.Plugins
 
                 var victimPlayer = entity as BasePlayer;
                 var attackerPlayer = info?.InitiatorPlayer;
+                var isTruePvPDeath = IsValidPlayer(victimPlayer) && IsValidPlayer(attackerPlayer) && attackerPlayer.userID != victimPlayer.userID;
 
                 if (IsValidPlayer(victimPlayer))
                 {
                     var victimRecord = GetOrCreatePlayerRecord(victimPlayer.userID, victimPlayer.displayName);
                     victimRecord.IsNpc = victimPlayer.IsNpc;
-                    victimRecord.CurrentWipe.PvP.Deaths++;
-                    victimRecord.Lifetime.PvP.Deaths++;
                     victimRecord.CurrentWipe.Survival.Respawns++;
                     victimRecord.Lifetime.Survival.Respawns++;
-                    victimRecord.CurrentWipe.PvP.KillStreakCurrent = 0;
-                    victimRecord.Lifetime.PvP.KillStreakCurrent = 0;
+
+                    if (isTruePvPDeath)
+                    {
+                        victimRecord.CurrentWipe.PvP.Deaths++;
+                        victimRecord.Lifetime.PvP.Deaths++;
+                        victimRecord.CurrentWipe.PvP.KillStreakCurrent = 0;
+                        victimRecord.Lifetime.PvP.KillStreakCurrent = 0;
+                    }
 
                     FinalizeLife(victimPlayer, victimRecord);
                     MarkPlayerDirty(victimPlayer.userID);
                 }
 
-                if (IsValidPlayer(attackerPlayer) && IsValidPlayer(victimPlayer) && attackerPlayer.userID != victimPlayer.userID)
+                if (isTruePvPDeath)
                 {
                     var attackerRecord = GetOrCreatePlayerRecord(attackerPlayer.userID, attackerPlayer.displayName);
                     attackerRecord.IsNpc = attackerPlayer.IsNpc;
