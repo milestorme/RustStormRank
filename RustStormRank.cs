@@ -720,7 +720,7 @@ namespace Oxide.Plugins
             switch (page)
             {
                 case "pvp":
-                    AddStatRow(container, body, 0.78f, "Kills", stats.PvP.Kills.ToString(), "Deaths", stats.PvP.Deaths.ToString(), "Headshots", stats.PvP.Headshots.ToString());
+                    AddStatRow(container, body, 0.78f, "Kills", stats.PvP.Kills.ToString(), "Deaths", stats.PvP.Deaths.ToString(), "Headshot Kills", stats.PvP.Headshots.ToString());
                     AddStatRow(container, body, 0.62f, "KDR", GetKdr(stats.PvP).ToString("F2"), "Damage Dealt", stats.PvP.DamageDealt.ToString("F0"), "Damage Taken", stats.PvP.DamageTaken.ToString("F0"));
                     AddStatRow(container, body, 0.46f, "Best Streak", stats.PvP.KillStreakBest.ToString(), "Current Streak", stats.PvP.KillStreakCurrent.ToString(), "PvP Score", stats.ScoreCache.PvPScore.ToString("F1"));
                     break;
