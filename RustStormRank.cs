@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Game.Rust.Cui;
+using Rust;
 using UnityEngine;
 
 namespace Oxide.Plugins
@@ -1141,6 +1142,62 @@ namespace Oxide.Plugins
         }
 
 
+        private int GetTierOrder(string tier)
+        {
+            switch (tier)
+            {
+                case "Bronze": return 1;
+                case "Silver": return 2;
+                case "Gold": return 3;
+                case "Platinum": return 4;
+                case "Diamond": return 5;
+                case "RustGod": return 6;
+                case "MAX": return 7;
+                default: return 0;
+            }
+        }
+
+        private void HandleTierProgression(ulong userId, PlayerRecord record)
+        {
+            if (record == null)
+                return;
+
+            var newTier = GetRankTier(record.CurrentWipe.ScoreCache.OverallScore);
+            var oldTier = record.LastKnownCurrentWipeTier;
+
+            if (string.IsNullOrEmpty(oldTier))
+            {
+                record.LastKnownCurrentWipeTier = newTier;
+                return;
+            }
+
+            if (string.Equals(oldTier, newTier, StringComparison.Ordinal))
+                return;
+
+            var oldOrder = GetTierOrder(oldTier);
+            var newOrder = GetTierOrder(newTier);
+
+            record.LastKnownCurrentWipeTier = newTier;
+
+            if (newOrder <= oldOrder || newOrder <= 0)
+                return;
+
+            var player = BasePlayer.FindByID(userId);
+            if (player == null || !player.IsConnected)
+                return;
+
+            if (_config.General.EnableTierUpChatMessage)
+                player.ChatMessage($"<color=#33C8FF>Tier Up!</color> You reached <color=#FFD166>{newTier}</color>.");
+
+            if (_config.General.EnableTierUpEffect &&
+                !string.IsNullOrWhiteSpace(_config.General.TierUpEffectPrefab) &&
+                player.net != null &&
+                player.net.connection != null)
+            {
+                EffectNetwork.Send(new Effect(_config.General.TierUpEffectPrefab, player.transform.position, player.transform.position), player.net.connection);
+            }
+        }
+
         private string GetLeaderboardPlaceColor(int index)
         {
             switch (index)
@@ -1248,6 +1305,7 @@ namespace Oxide.Plugins
 
             CalculateScopeScores(record.CurrentWipe);
             CalculateScopeScores(record.Lifetime);
+            HandleTierProgression(userId, record);
 
             var teamId = GetCurrentTeamId(userId);
             if (teamId != 0UL)
@@ -1820,7 +1878,10 @@ namespace Oxide.Plugins
                 Interface.Oxide.DataFileSystem.WriteObject(ArchiveFilePrefix + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss"), _data);
 
             foreach (var pair in _data.Players)
+            {
                 pair.Value.CurrentWipe = new ScopeStats();
+                pair.Value.LastKnownCurrentWipeTier = "Unranked";
+            }
 
             foreach (var pair in _data.Teams)
                 pair.Value.CurrentWipe = new ScopeStats();
@@ -2293,8 +2354,12 @@ namespace Oxide.Plugins
                 _config.General.ChatCommand = "rank";
             if (string.IsNullOrWhiteSpace(_config.General.UiTitle))
                 _config.General.UiTitle = "RustStorm Rank";
+            if (string.IsNullOrWhiteSpace(_config.General.ChatCommand))
+                _config.General.ChatCommand = "rank";
             if (string.IsNullOrWhiteSpace(_config.General.AdminPermission))
                 _config.General.AdminPermission = DefaultAdminPermission;
+            if (string.IsNullOrWhiteSpace(_config.General.TierUpEffectPrefab))
+                _config.General.TierUpEffectPrefab = "assets/prefabs/misc/halloween/lootbag/effects/gold_open.prefab";
 
             _config.Performance.SaveIntervalSeconds = Mathf.Max(60f, _config.Performance.SaveIntervalSeconds);
             _config.Performance.RecalculateIntervalSeconds = Mathf.Max(15f, _config.Performance.RecalculateIntervalSeconds);
@@ -2611,6 +2676,7 @@ namespace Oxide.Plugins
             public string LastKnownName;
             public DateTime LastSeenUtc;
             public bool IsNpc;
+            public string LastKnownCurrentWipeTier = string.Empty;
             public ScopeStats CurrentWipe = new ScopeStats();
             public ScopeStats Lifetime = new ScopeStats();
         }
@@ -2762,6 +2828,15 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "AdminPermission")]
             public string AdminPermission = DefaultAdminPermission;
+
+            [JsonProperty(PropertyName = "EnableTierUpChatMessage")]
+            public bool EnableTierUpChatMessage = true;
+
+            [JsonProperty(PropertyName = "EnableTierUpEffect")]
+            public bool EnableTierUpEffect = true;
+
+            [JsonProperty(PropertyName = "TierUpEffectPrefab")]
+            public string TierUpEffectPrefab = "assets/prefabs/misc/halloween/lootbag/effects/gold_open.prefab";
         }
 
         private class PerformanceSettings
