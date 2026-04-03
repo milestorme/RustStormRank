@@ -23,6 +23,7 @@ namespace Oxide.Plugins
         private readonly Dictionary<string, List<LeaderboardEntry>> _leaderboardCache = new Dictionary<string, List<LeaderboardEntry>>();
         private readonly Dictionary<ulong, RuntimePlayerState> _runtimeStates = new Dictionary<ulong, RuntimePlayerState>();
         private readonly Dictionary<ulong, Vector3> _lastPositionByPlayer = new Dictionary<ulong, Vector3>();
+        private readonly Dictionary<ulong, int> _playersPageByViewer = new Dictionary<ulong, int>();
 
         private Timer _saveTimer;
         private Timer _recalcTimer;
@@ -582,6 +583,36 @@ namespace Oxide.Plugins
             OpenRankUi(player, scope, page, targetUserId);
         }
 
+        [ConsoleCommand("ruststormrank.playerspage")]
+        private void ConsoleCommandPlayersPage(ConsoleSystem.Arg arg)
+        {
+            var player = arg?.Player();
+            if (!IsValidPlayer(player))
+                return;
+
+            var args = arg.Args;
+            var requestedPage = 0;
+            if (args != null && args.Length > 0)
+                int.TryParse(args[0], out requestedPage);
+
+            if (requestedPage < 0)
+                requestedPage = 0;
+
+            _playersPageByViewer[player.userID] = requestedPage;
+
+            var scope = args != null && args.Length > 1 ? ParseScope(args[1]) : RankScope.CurrentWipe;
+            var targetUserId = player.userID;
+
+            if (args != null && args.Length > 2)
+            {
+                ulong parsedTarget;
+                if (ulong.TryParse(args[2], out parsedTarget) && parsedTarget != 0UL)
+                    targetUserId = parsedTarget;
+            }
+
+            OpenRankUi(player, scope, "players", targetUserId);
+        }
+
         [ConsoleCommand("ruststormrank.close")]
         private void ConsoleCommandCloseUi(ConsoleSystem.Arg arg)
         {
@@ -633,7 +664,7 @@ namespace Oxide.Plugins
             AddButton(container, panel, "Lifetime", scope == RankScope.Lifetime ? BuildUiCommand("overview", RankScope.CurrentWipe, player.userID, normalizedTargetUserId) : BuildUiCommand("overview", RankScope.Lifetime, player.userID, normalizedTargetUserId), "0.70 0.84", "0.81 0.89", false, scope == RankScope.Lifetime);
 
             if (scope != RankScope.Team)
-                AddButton(container, panel, "Players", BuildUiCommand("players", scope, player.userID, normalizedTargetUserId, true), "0.82 0.84", "0.91 0.89", false, page == "players");
+                AddButton(container, panel, "Players", "ruststormrank.playerspage 0 " + ScopeToArg(scope) + " " + normalizedTargetUserId, "0.82 0.84", "0.91 0.89", false, page == "players");
 
             AddButton(container, panel, "Close", "ruststormrank.close", "0.89 0.925", "0.97 0.975", true);
 
@@ -1487,24 +1518,36 @@ namespace Oxide.Plugins
                 return;
             }
 
+            const int rowsPerPage = 8;
+            const float rowHeight = 0.066f;
+            const float rowGap = 0.008f;
+            const float yTop = 0.74f;
+
+            var currentPage = 0;
+            _playersPageByViewer.TryGetValue(viewer.userID, out currentPage);
+
+            var totalPages = Mathf.Max(1, Mathf.CeilToInt(entries.Count / (float)rowsPerPage));
+            currentPage = Mathf.Clamp(currentPage, 0, totalPages - 1);
+            _playersPageByViewer[viewer.userID] = currentPage;
+
             AddDivider(container, body, "0.05 0.775", "0.95 0.779");
             AddLabel(container, body, "Rank", 12, "0.06 0.79", "0.14 0.84", UiTextMuted, TextAnchor.MiddleLeft);
             AddLabel(container, body, "Player", 12, "0.15 0.79", "0.66 0.84", UiTextMuted, TextAnchor.MiddleLeft);
             AddLabel(container, body, "Score", 12, "0.68 0.79", "0.80 0.84", UiTextMuted, TextAnchor.MiddleRight);
             AddLabel(container, body, "Action", 12, "0.82 0.79", "0.93 0.84", UiTextMuted, TextAnchor.MiddleCenter);
 
-            var max = Mathf.Min(8, entries.Count);
-            const float rowHeight = 0.085f;
-            const float rowGap = 0.012f;
-            const float yTop = 0.74f;
+            var startIndex = currentPage * rowsPerPage;
+            var endIndex = Mathf.Min(startIndex + rowsPerPage, entries.Count);
 
-            for (var i = 0; i < max; i++)
+            for (var i = startIndex; i < endIndex; i++)
             {
+                var localIndex = i - startIndex;
                 var entry = entries[i];
-                var top = yTop - (i * (rowHeight + rowGap));
+                var top = yTop - (localIndex * (rowHeight + rowGap));
                 var bottom = top - rowHeight;
                 var isSelected = entry.Id == targetUserId;
-                var rowColor = isSelected ? UiBgRowSelf : (i % 2 == 0 ? UiBgRow : UiBgRowAlt);
+                var placeColor = GetLeaderboardPlaceColor(i);
+                var rowColor = isSelected ? UiBgRowSelf : (i < 3 ? UiBgRowTop : (i % 2 == 0 ? UiBgRow : UiBgRowAlt));
 
                 var row = container.Add(new CuiPanel
                 {
@@ -1518,19 +1561,74 @@ namespace Oxide.Plugins
 
                 container.Add(new CuiPanel
                 {
-                    Image = { Color = GetLeaderboardPlaceColor(i) },
-                    RectTransform = { AnchorMin = "0.00 0.00", AnchorMax = "0.010 1.00" }
+                    Image = { Color = placeColor },
+                    RectTransform = { AnchorMin = "0.00 0.00", AnchorMax = "0.012 1.00" }
                 }, row);
 
-                AddLabel(container, row, "#" + GetPlayerRank(entry.Id, scope), 13, "0.03 0.10", "0.13 0.90", GetLeaderboardPlaceColor(i), TextAnchor.MiddleLeft);
-                AddLabel(container, row, entry.DisplayName, 14, "0.15 0.10", "0.66 0.90", isSelected ? UiTextPrimary : UiTextSoft, TextAnchor.MiddleLeft);
-                AddLabel(container, row, entry.Score.ToString("F1"), 14, "0.68 0.10", "0.80 0.90", UiAccentBlue, TextAnchor.MiddleRight);
+                container.Add(new CuiLabel
+                {
+                    Text =
+                    {
+                        Text = "#" + (i + 1),
+                        FontSize = 12,
+                        Align = TextAnchor.MiddleLeft,
+                        Color = placeColor
+                    },
+                    RectTransform = { AnchorMin = "0.03 0.08", AnchorMax = "0.13 0.92" }
+                }, row);
 
-                AddButton(container, row, isSelected ? "Viewing" : "View", BuildUiCommand("overview", scope, viewer.userID, entry.Id), "0.82 0.16", "0.94 0.84", false, isSelected);
+                container.Add(new CuiLabel
+                {
+                    Text =
+                    {
+                        Text = entry.DisplayName,
+                        FontSize = 13,
+                        Align = TextAnchor.MiddleLeft,
+                        Color = isSelected ? UiTextPrimary : UiTextSoft
+                    },
+                    RectTransform = { AnchorMin = "0.15 0.08", AnchorMax = "0.75 0.92" }
+                }, row);
+
+                container.Add(new CuiLabel
+                {
+                    Text =
+                    {
+                        Text = entry.Score.ToString("F1"),
+                        FontSize = 13,
+                        Align = TextAnchor.MiddleRight,
+                        Color = isSelected ? UiAccentGold : UiAccentBlue
+                    },
+                    RectTransform = { AnchorMin = "0.69 0.08", AnchorMax = "0.82 0.92" }
+                }, row);
+
+                var command = isSelected ? string.Empty : BuildUiCommand("overview", scope, viewer.userID, entry.Id, true);
+                container.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Color = isSelected ? "0.24 0.47 0.72 0.98" : "0.08 0.12 0.22 0.94",
+                        Command = command
+                    },
+                    RectTransform = { AnchorMin = "0.84 0.12", AnchorMax = "0.96 0.88" },
+                    Text =
+                    {
+                        Text = isSelected ? "Viewing" : "View",
+                        FontSize = 12,
+                        Align = TextAnchor.MiddleCenter,
+                        Color = UiTextPrimary
+                    }
+                }, row);
             }
 
-            AddLabel(container, body, "Tip: leaderboard rows in Top are clickable too.", 12, "0.05 0.03", "0.95 0.08", UiTextMuted, TextAnchor.MiddleLeft);
+            var prevPage = Mathf.Max(0, currentPage - 1);
+            var nextPage = Mathf.Min(totalPages - 1, currentPage + 1);
+            AddButton(container, body, "◀ Prev", "ruststormrank.playerspage " + prevPage + " " + ScopeToArg(scope) + " " + targetUserId, "0.05 0.05", "0.15 0.10", false, false);
+            AddLabel(container, body, "Page " + (currentPage + 1) + " / " + totalPages, 13, "0.42 0.048", "0.58 0.102", UiTextSoft, TextAnchor.MiddleCenter);
+            AddButton(container, body, "Next ▶", "ruststormrank.playerspage " + nextPage + " " + ScopeToArg(scope) + " " + targetUserId, "0.85 0.05", "0.95 0.10", false, false);
+
+            AddLabel(container, body, "Tip: leaderboard rows in Top are clickable too.", 13, "0.05 0.005", "0.45 0.045", UiTextMuted, TextAnchor.MiddleLeft);
         }
+
 
         private List<LeaderboardEntry> GetSelectablePlayers(RankScope scope)
         {
