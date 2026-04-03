@@ -1940,11 +1940,13 @@ namespace Oxide.Plugins
                 if (!_config.Discord.Enabled || !_config.Discord.DailyPost.Enabled || string.IsNullOrWhiteSpace(_config.Discord.WebhookURL))
                     return;
 
-                var now = DateTime.Now;
-                if (now.Hour != _config.Discord.DailyPost.PostHour || now.Minute != _config.Discord.DailyPost.PostMinute)
-                    return;
+                var now = GetDailyPostNow();
+                var scheduledToday = new DateTime(now.Year, now.Month, now.Day, _config.Discord.DailyPost.PostHour, _config.Discord.DailyPost.PostMinute, 0);
 
                 if (_lastDailyDiscordPostUtc.Date == now.Date)
+                    return;
+
+                if (now < scheduledToday)
                     return;
 
                 var category = NormalizeWebhookCategory(_config.Discord.DailyPost.Category);
@@ -1953,14 +1955,44 @@ namespace Oxide.Plugins
                     ? RankScope.Lifetime
                     : RankScope.CurrentWipe;
 
+                var cacheCategory = category == "team"
+                    ? (scope == RankScope.Lifetime ? "team_lifetime" : "team")
+                    : category;
+                var key = GetLeaderboardCacheKey(scope == RankScope.Team ? RankScope.Team : scope, cacheCategory);
+
+                List<LeaderboardEntry> entries;
+                if (!_leaderboardCache.TryGetValue(key, out entries) || entries == null || entries.Count == 0)
+                    return;
+
                 PostDiscordSummary(category, scope);
                 _lastDailyDiscordPostUtc = now;
 
-                Puts($"[{Name}] Daily Discord leaderboard posted ({category}, {scope}).");
+                Puts($"[{Name}] Daily Discord leaderboard posted ({category}, {scope}) at {now:HH:mm:ss} {_config.Discord.DailyPost.TimeZoneId}.");
             }
             catch (Exception ex)
             {
                 PrintError($"CheckDailyDiscordPost error: {ex}");
+            }
+        }
+
+        private DateTime GetDailyPostNow()
+        {
+            var timeZoneId = _config != null &&
+                             _config.Discord != null &&
+                             _config.Discord.DailyPost != null &&
+                             !string.IsNullOrWhiteSpace(_config.Discord.DailyPost.TimeZoneId)
+                ? _config.Discord.DailyPost.TimeZoneId
+                : "Australia/Perth";
+
+            try
+            {
+                var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+                return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+            }
+            catch (Exception ex)
+            {
+                PrintWarning($"[{Name}] Invalid DailyPost TimeZoneId '{timeZoneId}', falling back to UTC. {ex.Message}");
+                return DateTime.UtcNow;
             }
         }
 
@@ -2132,7 +2164,7 @@ namespace Oxide.Plugins
             _recalcTimer = timer.Every(_config.Performance.RecalculateIntervalSeconds, RecalculateDirty);
             _activityTimer = timer.Every(_config.Performance.ActivityTickSeconds, TickPlayerActivity);
             _cleanupTimer = timer.Every(_config.Performance.CleanupIntervalSeconds, CleanupInactiveTeams);
-            _dailyDiscordTimer = timer.Every(60f, CheckDailyDiscordPost);
+            _dailyDiscordTimer = timer.Every(30f, CheckDailyDiscordPost);
         }
 
         private void DestroyTimers()
@@ -2272,6 +2304,8 @@ namespace Oxide.Plugins
             _config.Discord.DailyPost.Category = NormalizeWebhookCategory(_config.Discord.DailyPost.Category);
             if (string.IsNullOrWhiteSpace(_config.Discord.DailyPost.Scope))
                 _config.Discord.DailyPost.Scope = "current";
+            if (string.IsNullOrWhiteSpace(_config.Discord.DailyPost.TimeZoneId))
+                _config.Discord.DailyPost.TimeZoneId = "Australia/Perth";
         }
 
         #endregion
@@ -2814,6 +2848,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Scope")]
             public string Scope = "current";
+
+            [JsonProperty(PropertyName = "TimeZoneId")]
+            public string TimeZoneId = "Australia/Perth";
         }
 
         private class WipeSettings
