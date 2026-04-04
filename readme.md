@@ -87,7 +87,7 @@ Tracks:
 * Rank movement tracking (↑ ↓ new)
 * Click-to-inspect players & teams
 
-  <img width="1701" height="1076" alt="top" src="https://github.com/user-attachments/assets/4d64ecc3-a458-4ef2-812b-a1d37eb75266" />
+<img width="1707" height="1083" alt="top" src="https://github.com/user-attachments/assets/d37717c7-84ad-411a-b686-5fe7b39c5e82" />
 
 ---
 
@@ -111,7 +111,7 @@ Tracks:
   * Survival
   * Lifetime
 
-    <img width="1650" height="1035" alt="players" src="https://github.com/user-attachments/assets/73462b89-d2ad-4573-bbd5-e1b7b5fb7a66" />
+<img width="1697" height="1064" alt="players" src="https://github.com/user-attachments/assets/f9e5c55d-aee9-4e51-b72c-37f882195523" />
 
 ---
 
@@ -135,7 +135,7 @@ Tracks:
   * Rank color styling
   * Responsive stat panels
 
-    <img width="1651" height="1027" alt="overall" src="https://github.com/user-attachments/assets/b9c1c3b6-ffd0-46d8-a9fc-4fc70cb58fc8" />
+<img width="1687" height="1070" alt="overall" src="https://github.com/user-attachments/assets/7f7bbb06-e6b0-4676-901f-e266a38fde3f" />
 
 ---
 
@@ -216,29 +216,21 @@ Tracks:
 # ⚙️ Commands
 
 ## 🎮 Player Commands
-
 ```
 /rank
 ```
-
 Opens ranking UI
-
 ```
 /rank top
 ```
-
 Opens leaderboard directly
-
 ```
 /rank players
 ```
-
 Opens player browser
-
 ```
 /rank team
 ```
-
 Opens team leaderboard
 
 ---
