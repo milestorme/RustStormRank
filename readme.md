@@ -72,6 +72,8 @@ Tracks:
 * Highlighted leaderboard rows
 * Responsive stat panels
 * Visual polish across all tabs
+<img width="1651" height="1027" alt="overall" src="https://github.com/user-attachments/assets/b9c1c3b6-ffd0-46d8-a9fc-4fc70cb58fc8" />
+<img width="1650" height="1035" alt="players" src="https://github.com/user-attachments/assets/73462b89-d2ad-4573-bbd5-e1b7b5fb7a66" />
 
 ---
 
@@ -137,6 +139,7 @@ Tracks:
   * Scope (current/lifetime)
 * Posts **once per day only** (anti-spam)
 * Supports **timezone control**
+<img width="494" height="434" alt="discordleaderboard" src="https://github.com/user-attachments/assets/cc2a1dc3-8a86-4962-b811-d77848262759" />
 
 ---
 
