@@ -118,7 +118,7 @@ namespace Oxide.Plugins
             record.IsNpc = player.IsNpc;
             record.LastSeenUtc = DateTime.UtcNow;
 
-            EnsureRuntimeState(player);
+            EnsureRuntimeState(player, record);
             _lastPositionByPlayer[player.userID] = player.transform.position;
             MarkPlayerDirty(player.userID);
         }
@@ -151,8 +151,11 @@ namespace Oxide.Plugins
             record.IsNpc = player.IsNpc;
             record.LastSeenUtc = DateTime.UtcNow;
 
-            var state = EnsureRuntimeState(player);
-            state.CurrentLifeStartUtc = DateTime.UtcNow;
+            var now = DateTime.UtcNow;
+            record.CurrentLifeStartUtc = now;
+
+            var state = EnsureRuntimeState(player, record);
+            state.CurrentLifeStartUtc = now;
             _lastPositionByPlayer[player.userID] = player.transform.position;
 
             MarkPlayerDirty(player.userID);
@@ -371,8 +374,8 @@ namespace Oxide.Plugins
                 if (!IsValidPlayer(player))
                     continue;
 
-                GetOrCreatePlayerRecord(player.userID, player.displayName);
-                EnsureRuntimeState(player);
+                var record = GetOrCreatePlayerRecord(player.userID, player.displayName);
+                EnsureRuntimeState(player, record);
                 _lastPositionByPlayer[player.userID] = player.transform.position;
             }
         }
@@ -388,7 +391,7 @@ namespace Oxide.Plugins
 
                     var record = GetOrCreatePlayerRecord(player.userID, player.displayName);
                     record.IsNpc = player.IsNpc;
-                    var state = EnsureRuntimeState(player);
+                    var state = EnsureRuntimeState(player, record);
 
                     record.CurrentWipe.Survival.SecondsPlayed += _config.Performance.ActivityTickSeconds;
                     record.Lifetime.Survival.SecondsPlayed += _config.Performance.ActivityTickSeconds;
@@ -423,17 +426,29 @@ namespace Oxide.Plugins
             }
         }
 
-        private RuntimePlayerState EnsureRuntimeState(BasePlayer player)
+        private RuntimePlayerState EnsureRuntimeState(BasePlayer player, PlayerRecord record = null)
         {
             RuntimePlayerState state;
             if (!_runtimeStates.TryGetValue(player.userID, out state))
             {
+                var lifeStartUtc = record != null && record.CurrentLifeStartUtc > DateTime.MinValue
+                    ? record.CurrentLifeStartUtc
+                    : DateTime.UtcNow;
+
                 state = new RuntimePlayerState
                 {
-                    CurrentLifeStartUtc = DateTime.UtcNow,
+                    CurrentLifeStartUtc = lifeStartUtc,
                     LastKnownTeamId = player.currentTeam
                 };
                 _runtimeStates[player.userID] = state;
+            }
+
+            if (record != null)
+            {
+                if (record.CurrentLifeStartUtc <= DateTime.MinValue)
+                    record.CurrentLifeStartUtc = state.CurrentLifeStartUtc;
+                else if (state.CurrentLifeStartUtc != record.CurrentLifeStartUtc)
+                    state.CurrentLifeStartUtc = record.CurrentLifeStartUtc;
             }
 
             return state;
@@ -441,25 +456,17 @@ namespace Oxide.Plugins
 
         private void FinalizeLife(BasePlayer player, PlayerRecord record)
         {
-            RuntimePlayerState state;
-            if (!_runtimeStates.TryGetValue(player.userID, out state))
-            {
-                state = new RuntimePlayerState
-                {
-                    CurrentLifeStartUtc = DateTime.UtcNow,
-                    LastKnownTeamId = player.currentTeam
-                };
-                _runtimeStates[player.userID] = state;
-                return;
-            }
-
+            var state = EnsureRuntimeState(player, record);
             var lifeSeconds = (float)(DateTime.UtcNow - state.CurrentLifeStartUtc).TotalSeconds;
+
             if (lifeSeconds > record.CurrentWipe.Survival.LongestLifeSeconds)
                 record.CurrentWipe.Survival.LongestLifeSeconds = lifeSeconds;
             if (lifeSeconds > record.Lifetime.Survival.LongestLifeSeconds)
                 record.Lifetime.Survival.LongestLifeSeconds = lifeSeconds;
 
-            state.CurrentLifeStartUtc = DateTime.UtcNow;
+            var now = DateTime.UtcNow;
+            state.CurrentLifeStartUtc = now;
+            record.CurrentLifeStartUtc = now;
         }
 
         private void UpdateTeamStateForPlayer(BasePlayer player)
@@ -2680,6 +2687,7 @@ namespace Oxide.Plugins
             public DateTime LastSeenUtc;
             public bool IsNpc;
             public string LastKnownCurrentWipeTier = string.Empty;
+            public DateTime CurrentLifeStartUtc = DateTime.MinValue;
             public ScopeStats CurrentWipe = new ScopeStats();
             public ScopeStats Lifetime = new ScopeStats();
         }
