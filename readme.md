@@ -1,6 +1,6 @@
 # 🌩️ RustStormRank
 
-A fully featured, production-quality ranking system for Rust servers built on Oxide/uMod — featuring **live stat tracking, polished UI, player inspection, and premium Discord integration**.
+A fully featured, production-ready ranking system for Rust servers built on Oxide/uMod — featuring **live stat tracking, advanced team support, polished UI, and premium Discord integration**.
 
 ---
 
@@ -15,11 +15,48 @@ A fully featured, production-quality ranking system for Rust servers built on Ox
   * **Farm**
   * **Build**
   * **Survival**
+
 * Separate scopes:
 
   * **Current Wipe**
   * **Lifetime**
-* Dynamic scoring system with tier progression
+
+* Dynamic scoring system with:
+
+  * Weighted categories
+  * Confidence scaling
+  * Tier progression system
+
+---
+
+## 👥 Team System (NEW)
+
+* Full **team leaderboard support**
+
+* Teams ranked by **aggregated member performance**
+
+* Team UI includes:
+
+  * Leader
+  * Top player (highest score)
+  * Member count
+  * Team rank & score
+
+* Smart team naming:
+
+  * `LeaderName's Team`
+  * `LeaderName's Team | Top: Player`
+
+* 🏷 Optional **Clan Tag Integration** (via Clans plugin)
+
+  * Displays as: `[TAG] LeaderName's Team`
+  * Only shown if **all members share the same clan**
+  * Disabled by default (configurable)
+
+* Automatically filters:
+
+  * ❌ Empty teams
+  * ❌ Stale / invalid teams
 
 ---
 
@@ -28,33 +65,44 @@ A fully featured, production-quality ranking system for Rust servers built on Ox
 Tracks:
 
 * Kills / Deaths / KDR
+* Headshot kills
 * Damage dealt / taken
-* Resources gathered
-* Nodes hit
+* Resources gathered (wood, stone, metal, sulfur)
+* Nodes harvested
 * Structures built / upgraded / repaired
-* Playtime / survival metrics
+* Playtime & survival stats
+* Distance travelled
+* Longest life tracking
 
 ---
 
 ## 🏆 Leaderboards
 
 * Real-time **Top Rankings**
+* Supports:
+
+  * Players
+  * Teams
 * Sorted by category
-* Top 10 display
 * Rank movement tracking (↑ ↓ new)
-<img width="1701" height="1076" alt="top" src="https://github.com/user-attachments/assets/4d64ecc3-a458-4ef2-812b-a1d37eb75266" />
+* Click-to-inspect players & teams
+
+  <img width="1701" height="1076" alt="top" src="https://github.com/user-attachments/assets/4d64ecc3-a458-4ef2-812b-a1d37eb75266" />
 
 ---
 
 ## 👤 Player Inspection System
 
-* New **Players tab**
-* View stats of any player
+* Dedicated **Players tab**
+
+* View stats of any player instantly
+
 * Click players from:
 
   * Players tab
-  * Top leaderboard
-* Fully synced across tabs:
+  * Leaderboard
+
+* Fully synced across all tabs:
 
   * Overview
   * PvP
@@ -62,37 +110,53 @@ Tracks:
   * Build
   * Survival
   * Lifetime
-<img width="1650" height="1035" alt="players" src="https://github.com/user-attachments/assets/73462b89-d2ad-4573-bbd5-e1b7b5fb7a66" />
+
+    <img width="1650" height="1035" alt="players" src="https://github.com/user-attachments/assets/73462b89-d2ad-4573-bbd5-e1b7b5fb7a66" />
 
 ---
 
 ## 🎨 Premium UI
 
-* Dark **RustStorm-themed design**
-* Clean layout (no clutter)
-* Tier progression bar
-* Highlighted leaderboard rows
-* Responsive stat panels
-* Visual polish across all tabs
-<img width="1651" height="1027" alt="overall" src="https://github.com/user-attachments/assets/b9c1c3b6-ffd0-46d8-a9fc-4fc70cb58fc8" />
+* Clean **RustStorm-themed dark UI**
+
+* Smooth navigation with tab system:
+
+  * Overview
+  * PvP / Farm / Build / Survival
+  * Top
+  * Players
+  * Teams
+  * Lifetime
+
+* Features:
+
+  * Tier progression bar
+  * Highlighted leaderboard rows
+  * Rank color styling
+  * Responsive stat panels
+
+    <img width="1651" height="1027" alt="overall" src="https://github.com/user-attachments/assets/b9c1c3b6-ffd0-46d8-a9fc-4fc70cb58fc8" />
 
 ---
 
 ## 🏅 Tier System
 
-* Progression system:
+* Progression tiers:
 
-  * Unranked → Bronze → (expandable)
-* Tier-based UI styling
-* Progress bar tied to score
-* Next-tier preview
+  * Unranked → Bronze → Silver → Gold → Platinum → Diamond → RustGod
+
+* Features:
+
+  * Tier-based UI colors
+  * Progress bar
+  * Next-tier preview
+  * Tier-up notifications (chat + optional effect)
 
 ---
 
-## 🏷 Configurable Branding (NEW)
+## 🏷 Configurable Branding
 
-* UI title is now configurable via config
-* Allows full rebranding for any server
+* Fully customizable UI title
 
 ```json
 "General": {
@@ -100,51 +164,84 @@ Tracks:
 }
 ```
 
-👉 No code editing required — just change config
-
 ---
 
 # 🌐 Discord Integration (S-Tier)
 
 ## ✨ Features
 
-* Branded embeds with:
+* Branded Discord embeds:
 
-  * Server name (webhook username)
+  * Custom webhook name
   * Banner image
   * Thumbnail icon
-  * Custom avatar
+  * Avatar support
+
 * Clean leaderboard formatting
-* Top 10 players
-* Category-specific embeds
-* Clickable player names (Steam profiles)
+
+* Top players display
+
+* Category-specific leaderboards
+
+* Clickable Steam profiles
 
 ---
 
 ## 🔥 Advanced Features
 
-* 👑 **Player of the Day**
-* 🔥 **Dominating Leader** (lead % detection)
-* 📈 **Rank movement tracking**
-* 🥇🥈🥉 medals for top 3
+* 👑 Player of the Day
+* 🔥 Dominating Leader detection
+* 📈 Rank movement tracking
+* 🥇🥈🥉 Medal system
 
 ---
 
 ## ⏱ Daily Auto Post
 
-* Optional scheduled leaderboard post
+* Fully automated daily leaderboard posting
+
 * Configurable:
 
-  * Time (hour/minute)
+  * Time
   * Category
-  * Scope (current/lifetime)
-* Posts **once per day only** (anti-spam)
-* Supports **timezone control**
-<img width="494" height="434" alt="discordleaderboard" src="https://github.com/user-attachments/assets/cc2a1dc3-8a86-4962-b811-d77848262759" />
+  * Scope
+  * Timezone
+
+* Anti-spam protection (posts once per day)
+
+  <img width="494" height="434" alt="discordleaderboard" src="https://github.com/user-attachments/assets/cc2a1dc3-8a86-4962-b811-d77848262759" />
 
 ---
 
 # ⚙️ Commands
+
+## 🎮 Player Commands
+
+```
+/rank
+```
+
+Opens ranking UI
+
+```
+/rank top
+```
+
+Opens leaderboard directly
+
+```
+/rank players
+```
+
+Opens player browser
+
+```
+/rank team
+```
+
+Opens team leaderboard
+
+---
 
 ## 🛠 Admin Commands
 
@@ -152,26 +249,30 @@ Tracks:
 /rankadmin rebuild
 ```
 
-Rebuilds all ranking data.
+Rebuild all ranking data
 
 ```
 /rankadmin wipe
 ```
 
-Resets ranking data.
+Force wipe reset
 
 ```
-/rankadmin rebuild
-/rankadmin wipe
-/rankadmin webhook overall
-/rankadmin webhook pvp
-/rankadmin webhook farm
-/rankadmin webhook build
-/rankadmin webhook survival
-/rankadmin webhook team
+/rankadmin webhook <category>
 ```
 
-Manually sends leaderboard to Discord.
+Send leaderboard to Discord
+
+Available categories:
+
+```
+overall
+pvp
+farm
+build
+survival
+team
+```
 
 ---
 
@@ -203,7 +304,17 @@ oxide.grant group admin ruststormrank.admin
 
 ---
 
-## ⚙️ Discord Configuration (WITH TIMEZONE)
+## Teams
+
+```json
+"Teams": {
+  "UseClanTagsInTeamNames": false
+}
+```
+
+---
+
+## Discord
 
 ```json
 "Discord": {
@@ -227,101 +338,29 @@ oxide.grant group admin ruststormrank.admin
 
 ---
 
-## 🧠 Notes
+# 🌍 TimeZoneId (IMPORTANT)
 
-* `UiTitle` → controls in-game UI title
-* `AuthorName` → Discord webhook name
-* `AvatarUrl` → webhook profile image
-* `ThumbnailUrl` → embed icon (top right)
-* `BannerImageUrl` → large image at bottom
-* Time uses **server local time**
-
----
-
-# 📌 Usage Guide
-
-### Open UI
-
-Triggered via your UI system or bound command.
-
----
-
-### Navigate Tabs
-
-* Overview → summary + tier
-* PvP / Farm / Build / Survival → category stats
-* Top → leaderboard
-* Players → inspect others
-* Lifetime → long-term stats
-
----
-
-### Inspect Player
-
-1. Open **Players tab**
-2. Click a player
-3. Navigate tabs → view their stats
-
----
-
-### Discord Testing
-
-```
-/rankadmin webhook overall
-```
-
----
-
-## 🌍 TimeZoneId (IMPORTANT)
-
-The plugin now uses a **timezone-aware scheduler**.
-
-### ✔ Valid Format
-
-Use **IANA timezone names**:
+Uses **IANA timezone format**:
 
 ```
 Australia/Perth
-Australia/Sydney
 UTC
 America/New_York
 Europe/London
 ```
 
----
-
-## 📌 Behaviour
-
-- `TimeZoneId` controls WHEN the daily post fires
-- Uses the specified timezone instead of server local time
-- If missing → defaults to `Australia/Perth`
-- If invalid → falls back to `UTC`
-- Works regardless of server host location
-
----
-
-## 🔎 Find Valid Timezones
-
+Find more:
 https://www.iana.org/time-zones
 
 ---
 
-## 💡 Examples
+# 🧼 Performance
 
-Perth server:
-```json
-"TimeZoneId": "Australia/Perth"
-```
-
-Global server:
-```json
-"TimeZoneId": "UTC"
-```
-
-US server:
-```json
-"TimeZoneId": "America/New_York"
-```
+* Cached leaderboards
+* Dirty-state recalculation system
+* Optimized activity tracking
+* Minimal UI overhead
+* Safe Discord requests
 
 ---
 
@@ -329,27 +368,7 @@ US server:
 
 * Oxide/uMod
 * Rust server (latest)
-* Newtonsoft JSON (included in Oxide)
-
----
-
-# 🧼 Performance
-
-* Cached leaderboards
-* Timed recalculations
-* Safe async Discord requests
-* Minimal UI redraw overhead
-
----
-
-# 🔮 Future Expansion Ideas
-
-* Tier rewards system
-* Seasonal resets
-* Rank decay
-* Clan leaderboards
-* UI animations
-* Cross-server stats
+* Newtonsoft JSON (included)
 
 ---
 
@@ -357,17 +376,17 @@ US server:
 
 RustStormRank delivers:
 
-* 🎯 competitive ranking system
-* 🎨 polished UI experience
-* 🌐 premium Discord presence
-* 🧠 deep stat tracking
-* ⚡ high performance
+* 🎯 Competitive ranking system
+* 👥 Advanced team & clan integration
+* 🎨 Premium UI experience
+* 🌐 Professional Discord integration
+* ⚡ High performance & scalability
 
 ---
 
 # 💬 Credits
 
-* Author ***Milestorme***.
+* Author **Milestorme**
 
 ---
 
