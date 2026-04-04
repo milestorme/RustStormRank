@@ -25,6 +25,7 @@ namespace Oxide.Plugins
         private readonly Dictionary<ulong, RuntimePlayerState> _runtimeStates = new Dictionary<ulong, RuntimePlayerState>();
         private readonly Dictionary<ulong, Vector3> _lastPositionByPlayer = new Dictionary<ulong, Vector3>();
         private readonly Dictionary<ulong, int> _playersPageByViewer = new Dictionary<ulong, int>();
+        private bool _leaderboardsDirty = true;
 
         private Timer _saveTimer;
         private Timer _recalcTimer;
@@ -640,12 +641,17 @@ namespace Oxide.Plugins
         {
             DestroyUi(player);
 
-            var record = GetDisplayPlayerRecord(player, targetUserId);
+            var teamRecord = scope == RankScope.Team ? GetDisplayTeamRecord(player, targetUserId) : null;
+            var teamId = teamRecord != null ? teamRecord.TeamId : 0UL;
+
+            var record = GetDisplayPlayerRecord(player, scope == RankScope.Team ? 0UL : targetUserId);
             if (record == null)
                 return;
 
             var normalizedTargetUserId = record.UserId;
-            var stats = GetScopeStats(record, scope == RankScope.Team ? RankScope.CurrentWipe : scope);
+            var stats = scope == RankScope.Team
+                ? GetScopeStats(teamRecord, ResolveTeamDataScope(page))
+                : GetScopeStats(record, scope);
 
             var container = new CuiElementContainer();
             var panel = container.Add(new CuiPanel
@@ -664,38 +670,69 @@ namespace Oxide.Plugins
             AddLabel(container, panel, _config.General.UiTitle, 22, "0.03 0.925", "0.35 0.985", UiAccentBlue, TextAnchor.MiddleLeft);
             AddLabel(container, panel, $"{GetScopeTitle(scope)}", 18, "0.36 0.925", "0.65 0.985", UiTextPrimary, TextAnchor.MiddleLeft);
 
-            AddButton(container, panel, "Overview", BuildUiCommand("overview", scope, player.userID, normalizedTargetUserId), "0.03 0.84", "0.155 0.89", false, page == "overview");
-            AddButton(container, panel, "PvP", BuildUiCommand("pvp", scope, player.userID, normalizedTargetUserId), "0.165 0.84", "0.255 0.89", false, page == "pvp");
-            AddButton(container, panel, "Farm", BuildUiCommand("farm", scope, player.userID, normalizedTargetUserId), "0.265 0.84", "0.355 0.89", false, page == "farm");
-            AddButton(container, panel, "Build", BuildUiCommand("build", scope, player.userID, normalizedTargetUserId), "0.365 0.84", "0.455 0.89", false, page == "build");
-            AddButton(container, panel, "Survival", BuildUiCommand("survival", scope, player.userID, normalizedTargetUserId), "0.465 0.84", "0.59 0.89", false, page == "survival");
-            AddButton(container, panel, "Top", BuildUiCommand("top", scope, player.userID, normalizedTargetUserId), "0.60 0.84", "0.69 0.89", false, page == "top");
-            AddButton(container, panel, "Lifetime", scope == RankScope.Lifetime ? BuildUiCommand("overview", RankScope.CurrentWipe, player.userID, normalizedTargetUserId) : BuildUiCommand("overview", RankScope.Lifetime, player.userID, normalizedTargetUserId), "0.70 0.84", "0.81 0.89", false, scope == RankScope.Lifetime);
+            var tabTargetId = scope == RankScope.Team ? teamId : normalizedTargetUserId;
+
+            AddButton(container, panel, "Overview", BuildUiCommand("overview", scope, player.userID, tabTargetId), "0.03 0.84", "0.155 0.89", false, page == "overview");
+            AddButton(container, panel, "PvP", BuildUiCommand("pvp", scope, player.userID, tabTargetId), "0.165 0.84", "0.255 0.89", false, page == "pvp");
+            AddButton(container, panel, "Farm", BuildUiCommand("farm", scope, player.userID, tabTargetId), "0.265 0.84", "0.355 0.89", false, page == "farm");
+            AddButton(container, panel, "Build", BuildUiCommand("build", scope, player.userID, tabTargetId), "0.365 0.84", "0.455 0.89", false, page == "build");
+            AddButton(container, panel, "Survival", BuildUiCommand("survival", scope, player.userID, tabTargetId), "0.465 0.84", "0.59 0.89", false, page == "survival");
+            AddButton(container, panel, "Top", BuildUiCommand("top", scope, player.userID, tabTargetId), "0.60 0.84", "0.69 0.89", false, page == "top");
+            AddButton(container, panel, "Lifetime", scope == RankScope.Lifetime ? BuildUiCommand("overview", RankScope.CurrentWipe, player.userID, normalizedTargetUserId) : BuildUiCommand("overview", RankScope.Lifetime, player.userID, normalizedTargetUserId), "0.70 0.84", "0.79 0.89", false, scope == RankScope.Lifetime);
 
             if (scope != RankScope.Team)
-                AddButton(container, panel, "Players", "ruststormrank.playerspage 0 " + ScopeToArg(scope) + " " + normalizedTargetUserId, "0.82 0.84", "0.91 0.89", false, page == "players");
+                AddButton(container, panel, "Players", "ruststormrank.playerspage 0 " + ScopeToArg(scope) + " " + normalizedTargetUserId, "0.80 0.84", "0.89 0.89", false, page == "players");
+
+            AddButton(container, panel, "Teams", scope == RankScope.Team ? BuildUiCommand("overview", RankScope.CurrentWipe, player.userID, player.userID) : BuildUiCommand("top", RankScope.Team, player.userID, 0UL), "0.90 0.84", "0.98 0.89", false, scope == RankScope.Team);
 
             AddButton(container, panel, "Close", "ruststormrank.close", "0.89 0.925", "0.97 0.975", true);
 
             AddLabel(container, panel, "Players Online: " + BasePlayer.activePlayerList.Count, 14, "0.68 0.925", "0.84 0.985", UiTextSoft, TextAnchor.MiddleRight);
 
-            if (normalizedTargetUserId != player.userID)
+            if (scope == RankScope.Team)
+            {
+                var teamName = teamRecord != null ? GetTeamDisplayName(teamRecord.TeamId) : "No Team";
+                AddLabel(container, panel, "Viewing: " + teamName, 13, "0.03 0.805", "0.30 0.835", UiAccentGold, TextAnchor.MiddleLeft);
+            }
+            else if (normalizedTargetUserId != player.userID)
+            {
                 AddLabel(container, panel, "Viewing: " + record.LastKnownName, 13, "0.03 0.805", "0.30 0.835", UiAccentGold, TextAnchor.MiddleLeft);
+            }
 
-            AddSummaryCards(container, panel, stats, record, scope);
+            AddSummaryCards(container, panel, stats, record, scope, teamRecord);
 
             if (page == "top")
-                AddLeaderboardSection(container, panel, player, scope, normalizedTargetUserId);
+                AddLeaderboardSection(container, panel, player, scope, scope == RankScope.Team ? teamId : normalizedTargetUserId);
             else if (page == "players" && scope != RankScope.Team)
                 AddPlayersSection(container, panel, player, scope, normalizedTargetUserId);
             else
-                AddStatsSection(container, panel, stats, scope, page, record.UserId);
+                AddStatsSection(container, panel, stats, scope, page, scope == RankScope.Team ? teamId : record.UserId);
 
             CuiHelper.AddUi(player, container);
         }
 
-        private void AddSummaryCards(CuiElementContainer container, string parent, ScopeStats stats, PlayerRecord record, RankScope scope)
+        private void AddSummaryCards(CuiElementContainer container, string parent, ScopeStats stats, PlayerRecord record, RankScope scope, TeamRecord teamRecord = null)
         {
+            if (scope == RankScope.Team && teamRecord != null)
+            {
+                AddCard(container, parent, "Team Score", stats.ScoreCache.TeamScore.ToString("F1"), "0.03 0.68", "0.20 0.81", "0.91 0.70 0.35 1.00");
+                AddCard(container, parent, "PvP", stats.ScoreCache.PvPScore.ToString("F1"), "0.215 0.68", "0.385 0.81", "0.33 0.76 1.00 1.00");
+                AddCard(container, parent, "Farm", stats.ScoreCache.FarmScore.ToString("F1"), "0.40 0.68", "0.57 0.81", "0.33 0.76 1.00 1.00");
+                AddCard(container, parent, "Build", stats.ScoreCache.BuildScore.ToString("F1"), "0.585 0.68", "0.755 0.81", "0.33 0.76 1.00 1.00");
+                AddCard(container, parent, "Survival", stats.ScoreCache.SurvivalScore.ToString("F1"), "0.77 0.68", "0.94 0.81", "0.33 0.76 1.00 1.00");
+
+                var teamRank = GetTeamRank(teamRecord.TeamId, RankScope.CurrentWipe);
+                var teamRankColor = GetRankDisplayColor(teamRank);
+                var leaderName = GetTeamLeaderName(teamRecord.TeamId);
+                var topPlayerName = GetTopPlayerNameInTeam(teamRecord.TeamId, RankScope.CurrentWipe);
+
+                AddLabel(container, parent, $"Leader: {leaderName}", 15, "0.04 0.63", "0.34 0.67", "0.85 0.92 1.00 1.00", TextAnchor.MiddleLeft);
+                AddLabel(container, parent, $"Rank: #{teamRank}", 15, "0.35 0.63", "0.50 0.67", teamRankColor, TextAnchor.MiddleLeft);
+                AddLabel(container, parent, $"Top: {topPlayerName}", 15, "0.51 0.63", "0.72 0.67", UiAccentBlue, TextAnchor.MiddleLeft);
+                AddLabel(container, parent, $"Played: {FormatDuration(stats.Survival.SecondsPlayed)}", 15, "0.73 0.63", "0.94 0.67", UiAccentGold, TextAnchor.MiddleRight);
+                return;
+            }
+
             AddCard(container, parent, "Overall", stats.ScoreCache.OverallScore.ToString("F1"), "0.03 0.68", "0.20 0.81", "0.91 0.70 0.35 1.00");
             AddCard(container, parent, "PvP", stats.ScoreCache.PvPScore.ToString("F1"), "0.215 0.68", "0.385 0.81", "0.33 0.76 1.00 1.00");
             AddCard(container, parent, "Farm", stats.ScoreCache.FarmScore.ToString("F1"), "0.40 0.68", "0.57 0.81", "0.33 0.76 1.00 1.00");
@@ -746,6 +783,12 @@ namespace Oxide.Plugins
                     break;
 
                 default:
+                    if (scope == RankScope.Team)
+                    {
+                        AddTeamOverviewSection(container, body, stats, recordUserId);
+                        break;
+                    }
+
                     AddLabel(container, body, "Score Summary", 16, "0.04 0.82", "0.30 0.88", UiAccentBlue, TextAnchor.MiddleLeft);
                     AddDivider(container, body, "0.04 0.795", "0.96 0.799");
 
@@ -910,7 +953,20 @@ namespace Oxide.Plugins
                     RectTransform = { AnchorMin = useTwoColumns ? "0.76 0.08" : "0.83 0.08", AnchorMax = "0.96 0.92" }
                 }, row);
 
-                if (scope != RankScope.Team && entry.EntryType == "player")
+                if (scope == RankScope.Team && entry.EntryType == "team")
+                {
+                    container.Add(new CuiButton
+                    {
+                        Button =
+                        {
+                            Color = "0 0 0 0",
+                            Command = BuildUiCommand("overview", RankScope.Team, player.userID, entry.Id, true)
+                        },
+                        RectTransform = { AnchorMin = "0 0", AnchorMax = "1 1" },
+                        Text = { Text = string.Empty, FontSize = 1, Align = TextAnchor.MiddleCenter, Color = "0 0 0 0" }
+                    }, row);
+                }
+                else if (scope != RankScope.Team && entry.EntryType == "player")
                 {
                     container.Add(new CuiButton
                     {
@@ -1281,6 +1337,8 @@ namespace Oxide.Plugins
         private void RecalculateDirty()
         {
             var processed = 0;
+            var recalculatedPlayers = false;
+            var recalculatedTeams = false;
             var playerIds = new List<ulong>(_dirtyPlayers);
 
             foreach (var userId in playerIds)
@@ -1291,6 +1349,7 @@ namespace Oxide.Plugins
                 RecalculatePlayer(userId);
                 _dirtyPlayers.Remove(userId);
                 processed++;
+                recalculatedPlayers = true;
             }
 
             var teamIds = new List<ulong>(_dirtyTeams);
@@ -1298,9 +1357,14 @@ namespace Oxide.Plugins
             {
                 RecalculateTeam(teamId);
                 _dirtyTeams.Remove(teamId);
+                recalculatedTeams = true;
             }
 
-            RebuildLeaderboards();
+            if (recalculatedPlayers || recalculatedTeams || _leaderboardsDirty)
+            {
+                RebuildLeaderboards();
+                _leaderboardsDirty = false;
+            }
         }
 
         private void RebuildAllCaches()
@@ -1312,6 +1376,7 @@ namespace Oxide.Plugins
                 RecalculateTeam(teamId);
 
             RebuildLeaderboards();
+            _leaderboardsDirty = false;
         }
 
         private void RecalculatePlayer(ulong userId)
@@ -1452,6 +1517,8 @@ namespace Oxide.Plugins
 
         private void RebuildLeaderboards()
         {
+            _leaderboardsDirty = true;
+
             BuildPlayerLeaderboard(RankScope.CurrentWipe, "overall", s => s.ScoreCache.OverallScore);
             BuildPlayerLeaderboard(RankScope.CurrentWipe, "pvp", s => s.ScoreCache.PvPScore);
             BuildPlayerLeaderboard(RankScope.CurrentWipe, "farm", s => s.ScoreCache.FarmScore);
@@ -1514,7 +1581,7 @@ namespace Oxide.Plugins
                 list.Add(new LeaderboardEntry
                 {
                     Id = pair.Key,
-                    DisplayName = "Team " + pair.Key,
+                    DisplayName = GetTeamDisplayName(pair.Key),
                     Score = stats.ScoreCache.TeamScore,
                     EntryType = "team"
                 });
@@ -2378,7 +2445,7 @@ namespace Oxide.Plugins
 
             _config.Performance.SaveIntervalSeconds = Mathf.Max(60f, _config.Performance.SaveIntervalSeconds);
             _config.Performance.RecalculateIntervalSeconds = Mathf.Max(15f, _config.Performance.RecalculateIntervalSeconds);
-            _config.Performance.ActivityTickSeconds = Mathf.Clamp(_config.Performance.ActivityTickSeconds, 5f, 60f);
+            _config.Performance.ActivityTickSeconds = Mathf.Clamp(_config.Performance.ActivityTickSeconds, 10f, 60f);
             _config.Performance.CleanupIntervalSeconds = Mathf.Max(60f, _config.Performance.CleanupIntervalSeconds);
             _config.Performance.MaxDirtyPlayersPerPass = Mathf.Max(5, _config.Performance.MaxDirtyPlayersPerPass);
             _config.Performance.CacheLeaderboardEntries = Mathf.Clamp(_config.Performance.CacheLeaderboardEntries, 10, 200);
@@ -2591,6 +2658,151 @@ namespace Oxide.Plugins
             }
         }
 
+
+        private void AddTeamOverviewSection(CuiElementContainer container, string parent, ScopeStats stats, ulong recordUserId)
+        {
+            var teamId = recordUserId;
+            var teamRecord = GetOrCreateTeamRecord(teamId);
+            var teamRank = GetTeamRank(teamId, RankScope.CurrentWipe);
+            var memberCount = teamRecord.MemberUserIds != null ? teamRecord.MemberUserIds.Count : 0;
+            var leaderName = GetTeamLeaderName(teamId);
+            var topPlayerName = GetTopPlayerNameInTeam(teamId, RankScope.CurrentWipe);
+
+            AddLabel(container, parent, "Team Summary", 16, "0.04 0.82", "0.30 0.88", UiAccentBlue, TextAnchor.MiddleLeft);
+            AddDivider(container, parent, "0.04 0.795", "0.96 0.799");
+
+            AddMiniStat(container, parent, "Leader", leaderName, "0.04 0.71", "0.31 0.78");
+            AddMiniStat(container, parent, "Top Player", topPlayerName, "0.365 0.71", "0.635 0.78");
+            AddMiniStat(container, parent, "Members", memberCount.ToString(), "0.69 0.71", "0.96 0.78");
+
+            AddMiniStat(container, parent, "Team Rank", teamRank > 0 ? "#" + teamRank : "Unranked", "0.04 0.62", "0.31 0.69", teamRank > 0 ? GetRankDisplayColor(teamRank) : UiTextSoft);
+            AddMiniStat(container, parent, "Team Score", stats.ScoreCache.TeamScore.ToString("F1"), "0.365 0.62", "0.635 0.69");
+            AddMiniStat(container, parent, "PvP Score", stats.ScoreCache.PvPScore.ToString("F1"), "0.69 0.62", "0.96 0.69");
+
+            AddLabel(container, parent, "Team Activity", 16, "0.04 0.49", "0.30 0.55", UiAccentBlue, TextAnchor.MiddleLeft);
+            AddDivider(container, parent, "0.04 0.465", "0.96 0.469");
+            AddMiniStat(container, parent, "Kills", stats.PvP.Kills.ToString(), "0.04 0.38", "0.31 0.45");
+            AddMiniStat(container, parent, "Nodes Gathered", stats.Farm.NodesHarvested.ToString(), "0.365 0.38", "0.635 0.45");
+            AddMiniStat(container, parent, "Structures Built", stats.Build.StructuresBuilt.ToString(), "0.69 0.38", "0.96 0.45");
+
+            AddLabel(container, parent, "Team Survival", 16, "0.04 0.25", "0.30 0.31", UiAccentBlue, TextAnchor.MiddleLeft);
+            AddDivider(container, parent, "0.04 0.225", "0.96 0.229");
+            AddMiniStat(container, parent, "Played", FormatDuration(stats.Survival.SecondsPlayed), "0.04 0.14", "0.31 0.21");
+            AddMiniStat(container, parent, "Longest Life", FormatDuration(stats.Survival.LongestLifeSeconds), "0.365 0.14", "0.635 0.21");
+            AddMiniStat(container, parent, "Distance", stats.Survival.DistanceTraveled.ToString("F0") + "m", "0.69 0.14", "0.96 0.21");
+        }
+
+        private TeamRecord GetDisplayTeamRecord(BasePlayer viewer, ulong targetTeamId)
+        {
+            var teamId = targetTeamId;
+            if (teamId == 0UL)
+                teamId = GetCurrentTeamId(viewer.userID);
+
+            if (teamId == 0UL)
+                return null;
+
+            var record = GetOrCreateTeamRecord(teamId);
+            record.MemberUserIds = GetTeamMembers(teamId);
+            AggregateTeamScores(record, RankScope.CurrentWipe);
+            AggregateTeamScores(record, RankScope.Lifetime);
+            return record;
+        }
+
+        private ScopeStats GetScopeStats(TeamRecord record, RankScope scope)
+        {
+            if (record == null)
+                return new ScopeStats();
+
+            return scope == RankScope.Lifetime ? record.Lifetime : record.CurrentWipe;
+        }
+
+        private RankScope ResolveTeamDataScope(string page)
+        {
+            return RankScope.CurrentWipe;
+        }
+
+        private string GetTeamDisplayName(ulong teamId)
+        {
+            if (teamId == 0UL)
+                return "No Team";
+
+            var leaderName = GetTeamLeaderName(teamId);
+            var topPlayerName = GetTopPlayerNameInTeam(teamId, RankScope.CurrentWipe);
+
+            if (!string.IsNullOrEmpty(leaderName) && !string.IsNullOrEmpty(topPlayerName) && !string.Equals(leaderName, topPlayerName, StringComparison.OrdinalIgnoreCase))
+                return leaderName + "'s Team • Top: " + topPlayerName;
+
+            if (!string.IsNullOrEmpty(leaderName))
+                return leaderName + "'s Team";
+
+            if (!string.IsNullOrEmpty(topPlayerName))
+                return "Top: " + topPlayerName;
+
+            return "Team " + teamId;
+        }
+
+        private ulong GetTeamLeaderId(ulong teamId)
+        {
+            var manager = RelationshipManager.ServerInstance;
+            var team = manager != null ? manager.FindTeam(teamId) : null;
+            return team != null ? team.teamLeader : 0UL;
+        }
+
+        private string GetTeamLeaderName(ulong teamId)
+        {
+            var leaderId = GetTeamLeaderId(teamId);
+            if (leaderId == 0UL)
+                return "Unknown";
+
+            return GetPlayerDisplayName(leaderId);
+        }
+
+        private string GetPlayerDisplayName(ulong userId)
+        {
+            if (userId == 0UL)
+                return "Unknown";
+
+            PlayerRecord record;
+            if (_data.Players.TryGetValue(userId, out record) && !string.IsNullOrWhiteSpace(record.LastKnownName))
+                return record.LastKnownName;
+
+            var active = BasePlayer.FindByID(userId);
+            if (active != null && !string.IsNullOrWhiteSpace(active.displayName))
+                return active.displayName;
+
+            var sleeping = BasePlayer.FindSleeping(userId);
+            if (sleeping != null && !string.IsNullOrWhiteSpace(sleeping.displayName))
+                return sleeping.displayName;
+
+            return "Unknown";
+        }
+
+        private string GetTopPlayerNameInTeam(ulong teamId, RankScope scope)
+        {
+            var members = GetTeamMembers(teamId);
+            if (members == null || members.Count == 0)
+                return "Unknown";
+
+            ulong topUserId = 0UL;
+            var topScore = -1f;
+
+            foreach (var userId in members)
+            {
+                PlayerRecord record;
+                if (!_data.Players.TryGetValue(userId, out record))
+                    continue;
+
+                var stats = GetScopeStats(record, scope);
+                if (stats.ScoreCache.OverallScore > topScore)
+                {
+                    topScore = stats.ScoreCache.OverallScore;
+                    topUserId = userId;
+                }
+            }
+
+            return topUserId != 0UL ? GetPlayerDisplayName(topUserId) : "Unknown";
+        }
+
         private void ApplyGather(FarmStats farm, string shortname, int amount)
         {
             if (farm == null || string.IsNullOrWhiteSpace(shortname) || amount <= 0)
@@ -2655,6 +2867,23 @@ namespace Oxide.Plugins
             for (var i = 0; i < entries.Count; i++)
             {
                 if (entries[i].EntryType == "player" && entries[i].Id == userId)
+                    return i + 1;
+            }
+
+            return 0;
+        }
+
+        private int GetTeamRank(ulong teamId, RankScope scope)
+        {
+            var category = scope == RankScope.Lifetime ? "team_lifetime" : "team";
+            var key = GetLeaderboardCacheKey(RankScope.Team, category);
+            List<LeaderboardEntry> entries;
+            if (!_leaderboardCache.TryGetValue(key, out entries))
+                return 0;
+
+            for (var i = 0; i < entries.Count; i++)
+            {
+                if (entries[i].EntryType == "team" && entries[i].Id == teamId)
                     return i + 1;
             }
 
@@ -2861,13 +3090,13 @@ namespace Oxide.Plugins
             public float SaveIntervalSeconds = 300f;
 
             [JsonProperty(PropertyName = "RecalculateIntervalSeconds")]
-            public float RecalculateIntervalSeconds = 120f;
+            public float RecalculateIntervalSeconds = 180f;
 
             [JsonProperty(PropertyName = "ActivityTickSeconds")]
-            public float ActivityTickSeconds = 15f;
+            public float ActivityTickSeconds = 20f;
 
             [JsonProperty(PropertyName = "CleanupIntervalSeconds")]
-            public float CleanupIntervalSeconds = 600f;
+            public float CleanupIntervalSeconds = 900f;
 
             [JsonProperty(PropertyName = "MaxDirtyPlayersPerPass")]
             public int MaxDirtyPlayersPerPass = 50;
