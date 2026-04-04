@@ -42,6 +42,7 @@ Tracks:
 * Sorted by category
 * Top 10 display
 * Rank movement tracking (↑ ↓ new)
+<img width="1701" height="1076" alt="top" src="https://github.com/user-attachments/assets/4d64ecc3-a458-4ef2-812b-a1d37eb75266" />
 
 ---
 
