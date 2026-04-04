@@ -766,8 +766,8 @@ namespace Oxide.Plugins
 
                     AddLabel(container, body, "Tier Progression", 16, "0.04 0.49", "0.30 0.55", UiAccentBlue, TextAnchor.MiddleLeft);
                     AddDivider(container, body, "0.04 0.465", "0.96 0.469");
-                    AddMiniStat(container, body, "Current Tier", GetTierDisplay(currentTier), "0.04 0.38", "0.31 0.45");
-                    AddMiniStat(container, body, "Next Tier", GetTierDisplay(nextTier), "0.365 0.38", "0.635 0.45");
+                    AddMiniStat(container, body, "Current Tier", GetTierDisplay(currentTier), "0.04 0.38", "0.31 0.45", GetTierColor(currentTier));
+                    AddMiniStat(container, body, "Next Tier", GetTierDisplay(nextTier), "0.365 0.38", "0.635 0.45", GetTierColor(nextTier));
                     AddMiniStat(container, body, "Progress", progressPct.ToString("F0") + "%", "0.69 0.38", "0.96 0.45");
                     AddProgressBar(container, body, progressPct, "0.69 0.345", "0.96 0.36", GetTierBarColor(currentTier, nextTier));
 
