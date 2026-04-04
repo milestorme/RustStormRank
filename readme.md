@@ -136,6 +136,7 @@ Tracks:
   * Category
   * Scope (current/lifetime)
 * Posts **once per day only** (anti-spam)
+* Supports **timezone control**
 
 ---
 
@@ -156,6 +157,8 @@ Rebuilds all ranking data.
 Resets ranking data.
 
 ```
+/rankadmin rebuild
+/rankadmin wipe
 /rankadmin webhook overall
 /rankadmin webhook pvp
 /rankadmin webhook farm
@@ -196,7 +199,7 @@ oxide.grant group admin ruststormrank.admin
 
 ---
 
-## Discord
+## ⚙️ Discord Configuration (WITH TIMEZONE)
 
 ```json
 "Discord": {
@@ -212,7 +215,8 @@ oxide.grant group admin ruststormrank.admin
     "PostHour": 18,
     "PostMinute": 0,
     "Category": "overall",
-    "Scope": "current"
+    "Scope": "current",
+    "TimeZoneId": "Australia/Perth"
   }
 }
 ```
@@ -260,6 +264,59 @@ Triggered via your UI system or bound command.
 
 ```
 /rankadmin webhook overall
+```
+
+---
+
+## 🌍 TimeZoneId (IMPORTANT)
+
+The plugin now uses a **timezone-aware scheduler**.
+
+### ✔ Valid Format
+
+Use **IANA timezone names**:
+
+```
+Australia/Perth
+Australia/Sydney
+UTC
+America/New_York
+Europe/London
+```
+
+---
+
+## 📌 Behaviour
+
+- `TimeZoneId` controls WHEN the daily post fires
+- Uses the specified timezone instead of server local time
+- If missing → defaults to `Australia/Perth`
+- If invalid → falls back to `UTC`
+- Works regardless of server host location
+
+---
+
+## 🔎 Find Valid Timezones
+
+https://www.iana.org/time-zones
+
+---
+
+## 💡 Examples
+
+Perth server:
+```json
+"TimeZoneId": "Australia/Perth"
+```
+
+Global server:
+```json
+"TimeZoneId": "UTC"
+```
+
+US server:
+```json
+"TimeZoneId": "America/New_York"
 ```
 
 ---
