@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
+using Oxide.Core.Plugins;
 using Oxide.Game.Rust.Cui;
 using Rust;
 using UnityEngine;
@@ -14,6 +15,8 @@ namespace Oxide.Plugins
     [Description("Low-overhead leaderboard and ranking core for RustStorm with current wipe, lifetime, team scopes, and polished rebuilt clean UI from stable core.")]
     public class RustStormRank : RustPlugin
     {
+        [PluginReference] private Plugin Clans;
+
         #region Fields
 
         private PluginConfig _config;
@@ -25,8 +28,8 @@ namespace Oxide.Plugins
         private readonly Dictionary<ulong, RuntimePlayerState> _runtimeStates = new Dictionary<ulong, RuntimePlayerState>();
         private readonly Dictionary<ulong, Vector3> _lastPositionByPlayer = new Dictionary<ulong, Vector3>();
         private readonly Dictionary<ulong, int> _playersPageByViewer = new Dictionary<ulong, int>();
-        private bool _leaderboardsDirty = true;
-
+        private bool _leaderboardsDirty;
+        
         private Timer _saveTimer;
         private Timer _recalcTimer;
         private Timer _activityTimer;
@@ -80,6 +83,9 @@ namespace Oxide.Plugins
             StartTimers();
             RebuildAllCaches();
             Puts($"[{Name}] Ready. Players={_data.Players.Count}, Teams={_data.Teams.Count}");
+
+            if (_config.Teams.UseClanTagsInTeamNames && Clans == null)
+                PrintWarning("Team clan tags are enabled, but the Clans plugin was not found. Team names will be shown without clan tags.");
         }
 
         private void Unload()
@@ -713,8 +719,23 @@ namespace Oxide.Plugins
 
         private void AddSummaryCards(CuiElementContainer container, string parent, ScopeStats stats, PlayerRecord record, RankScope scope, TeamRecord teamRecord = null)
         {
-            if (scope == RankScope.Team && teamRecord != null)
+            if (scope == RankScope.Team)
             {
+                if (teamRecord == null || !HasValidTeamMembers(teamRecord.TeamId))
+                {
+                    AddCard(container, parent, "Team Score", "-", "0.03 0.68", "0.20 0.81", "0.91 0.70 0.35 1.00");
+                    AddCard(container, parent, "PvP", "-", "0.215 0.68", "0.385 0.81", "0.33 0.76 1.00 1.00");
+                    AddCard(container, parent, "Farm", "-", "0.40 0.68", "0.57 0.81", "0.33 0.76 1.00 1.00");
+                    AddCard(container, parent, "Build", "-", "0.585 0.68", "0.755 0.81", "0.33 0.76 1.00 1.00");
+                    AddCard(container, parent, "Survival", "-", "0.77 0.68", "0.94 0.81", "0.33 0.76 1.00 1.00");
+
+                    AddLabel(container, parent, "Leader: -", 15, "0.04 0.63", "0.34 0.67", "0.85 0.92 1.00 1.00", TextAnchor.MiddleLeft);
+                    AddLabel(container, parent, "Rank: -", 15, "0.35 0.63", "0.50 0.67", UiTextSoft, TextAnchor.MiddleLeft);
+                    AddLabel(container, parent, "Top: -", 15, "0.51 0.63", "0.72 0.67", UiAccentBlue, TextAnchor.MiddleLeft);
+                    AddLabel(container, parent, "Played: -", 15, "0.73 0.63", "0.94 0.67", UiAccentGold, TextAnchor.MiddleRight);
+                    return;
+                }
+
                 AddCard(container, parent, "Team Score", stats.ScoreCache.TeamScore.ToString("F1"), "0.03 0.68", "0.20 0.81", "0.91 0.70 0.35 1.00");
                 AddCard(container, parent, "PvP", stats.ScoreCache.PvPScore.ToString("F1"), "0.215 0.68", "0.385 0.81", "0.33 0.76 1.00 1.00");
                 AddCard(container, parent, "Farm", stats.ScoreCache.FarmScore.ToString("F1"), "0.40 0.68", "0.57 0.81", "0.33 0.76 1.00 1.00");
@@ -727,7 +748,7 @@ namespace Oxide.Plugins
                 var topPlayerName = GetTopPlayerNameInTeam(teamRecord.TeamId, RankScope.CurrentWipe);
 
                 AddLabel(container, parent, $"Leader: {leaderName}", 15, "0.04 0.63", "0.34 0.67", "0.85 0.92 1.00 1.00", TextAnchor.MiddleLeft);
-                AddLabel(container, parent, $"Rank: #{teamRank}", 15, "0.35 0.63", "0.50 0.67", teamRankColor, TextAnchor.MiddleLeft);
+                AddLabel(container, parent, teamRank > 0 ? $"Rank: #{teamRank}" : "Rank: -", 15, "0.35 0.63", "0.50 0.67", teamRank > 0 ? teamRankColor : UiTextSoft, TextAnchor.MiddleLeft);
                 AddLabel(container, parent, $"Top: {topPlayerName}", 15, "0.51 0.63", "0.72 0.67", UiAccentBlue, TextAnchor.MiddleLeft);
                 AddLabel(container, parent, $"Played: {FormatDuration(stats.Survival.SecondsPlayed)}", 15, "0.73 0.63", "0.94 0.67", UiAccentGold, TextAnchor.MiddleRight);
                 return;
@@ -1574,14 +1595,24 @@ namespace Oxide.Plugins
 
             foreach (var pair in _data.Teams)
             {
+                var members = GetTeamMembers(pair.Key);
+                if (members == null || members.Count == 0)
+                    continue;
+
+                pair.Value.MemberUserIds = members;
+
                 var stats = dataScope == RankScope.Lifetime ? pair.Value.Lifetime : pair.Value.CurrentWipe;
                 if (stats.ScoreCache.TeamScore <= 0f)
+                    continue;
+
+                var displayName = GetTeamDisplayName(pair.Key);
+                if (string.IsNullOrWhiteSpace(displayName))
                     continue;
 
                 list.Add(new LeaderboardEntry
                 {
                     Id = pair.Key,
-                    DisplayName = GetTeamDisplayName(pair.Key),
+                    DisplayName = displayName,
                     Score = stats.ScoreCache.TeamScore,
                     EntryType = "team"
                 });
@@ -2433,6 +2464,8 @@ namespace Oxide.Plugins
                 _config.Discord.DailyPost = new DailyPostSettings();
             if (_config.Wipe == null)
                 _config.Wipe = new WipeSettings();
+            if (_config.Teams == null)
+                _config.Teams = new TeamSettings();
 
             if (string.IsNullOrWhiteSpace(_config.General.UiTitle))
                 _config.General.UiTitle = "RustStorm Rank";
@@ -2637,6 +2670,17 @@ namespace Oxide.Plugins
             }
         }
 
+        private RankScope ResolveTeamDataScope(string page)
+        {
+            switch ((page ?? string.Empty).ToLowerInvariant())
+            {
+                case "lifetime":
+                    return RankScope.Lifetime;
+                default:
+                    return RankScope.CurrentWipe;
+            }
+        }
+
         private string GetPageTitle(string page, RankScope scope)
         {
             switch (page)
@@ -2662,7 +2706,16 @@ namespace Oxide.Plugins
         private void AddTeamOverviewSection(CuiElementContainer container, string parent, ScopeStats stats, ulong recordUserId)
         {
             var teamId = recordUserId;
+            if (!HasValidTeamMembers(teamId))
+            {
+                AddLabel(container, parent, "No Team Available", 19, "0.03 0.86", "0.97 0.94", UiTextPrimary, TextAnchor.MiddleLeft);
+                AddDivider(container, parent, "0.04 0.795", "0.96 0.799");
+                AddLabel(container, parent, "You are not currently in a Rust team.", 17, "0.05 0.45", "0.95 0.60", UiTextSoft, TextAnchor.MiddleCenter);
+                return;
+            }
+
             var teamRecord = GetOrCreateTeamRecord(teamId);
+            teamRecord.MemberUserIds = GetTeamMembers(teamId);
             var teamRank = GetTeamRank(teamId, RankScope.CurrentWipe);
             var memberCount = teamRecord.MemberUserIds != null ? teamRecord.MemberUserIds.Count : 0;
             var leaderName = GetTeamLeaderName(teamId);
@@ -2701,8 +2754,12 @@ namespace Oxide.Plugins
             if (teamId == 0UL)
                 return null;
 
+            var members = GetTeamMembers(teamId);
+            if (members == null || members.Count == 0)
+                return null;
+
             var record = GetOrCreateTeamRecord(teamId);
-            record.MemberUserIds = GetTeamMembers(teamId);
+            record.MemberUserIds = members;
             AggregateTeamScores(record, RankScope.CurrentWipe);
             AggregateTeamScores(record, RankScope.Lifetime);
             return record;
@@ -2716,29 +2773,69 @@ namespace Oxide.Plugins
             return scope == RankScope.Lifetime ? record.Lifetime : record.CurrentWipe;
         }
 
-        private RankScope ResolveTeamDataScope(string page)
-        {
-            return RankScope.CurrentWipe;
-        }
-
         private string GetTeamDisplayName(ulong teamId)
         {
-            if (teamId == 0UL)
-                return "No Team";
+            if (teamId == 0UL || !HasValidTeamMembers(teamId))
+                return string.Empty;
 
+            var teamRecord = GetOrCreateTeamRecord(teamId);
+            teamRecord.MemberUserIds = GetTeamMembers(teamId);
             var leaderName = GetTeamLeaderName(teamId);
             var topPlayerName = GetTopPlayerNameInTeam(teamId, RankScope.CurrentWipe);
+            var clanTag = GetTeamClanTag(teamRecord);
 
-            if (!string.IsNullOrEmpty(leaderName) && !string.IsNullOrEmpty(topPlayerName) && !string.Equals(leaderName, topPlayerName, StringComparison.OrdinalIgnoreCase))
-                return leaderName + "'s Team • Top: " + topPlayerName;
+            var baseName = !string.IsNullOrEmpty(leaderName) && !string.Equals(leaderName, "Unknown", StringComparison.OrdinalIgnoreCase)
+                ? leaderName + "'s Team"
+                : string.Empty;
 
-            if (!string.IsNullOrEmpty(leaderName))
-                return leaderName + "'s Team";
+            if (string.IsNullOrEmpty(baseName) && teamRecord.MemberUserIds != null && teamRecord.MemberUserIds.Count > 0)
+                baseName = GetPlayerDisplayName(teamRecord.MemberUserIds[0]) + "'s Team";
 
-            if (!string.IsNullOrEmpty(topPlayerName))
-                return "Top: " + topPlayerName;
+            if (string.IsNullOrEmpty(baseName) || string.Equals(baseName, "Unknown's Team", StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
 
-            return "Team " + teamId;
+            if (!string.IsNullOrEmpty(clanTag))
+                baseName = "[" + clanTag + "] " + baseName;
+
+            if (!string.IsNullOrEmpty(topPlayerName) && !string.Equals(topPlayerName, "Unknown", StringComparison.OrdinalIgnoreCase) && !string.Equals(leaderName, topPlayerName, StringComparison.OrdinalIgnoreCase))
+                return baseName + " | Top: " + topPlayerName;
+
+            return baseName;
+        }
+
+        private string GetClanTag(ulong userId)
+        {
+            if (!_config.Teams.UseClanTagsInTeamNames || Clans == null || userId == 0UL)
+                return null;
+
+            var clanTag = Clans.Call("GetClanOf", userId) as string;
+            return string.IsNullOrWhiteSpace(clanTag) ? null : clanTag.Trim();
+        }
+
+        private string GetTeamClanTag(TeamRecord teamRecord)
+        {
+            if (!_config.Teams.UseClanTagsInTeamNames || Clans == null || teamRecord == null || teamRecord.MemberUserIds == null || teamRecord.MemberUserIds.Count == 0)
+                return null;
+
+            string commonClan = null;
+
+            foreach (var memberId in teamRecord.MemberUserIds)
+            {
+                var clanTag = GetClanTag(memberId);
+                if (string.IsNullOrEmpty(clanTag))
+                    return null;
+
+                if (commonClan == null)
+                {
+                    commonClan = clanTag;
+                    continue;
+                }
+
+                if (!string.Equals(commonClan, clanTag, StringComparison.OrdinalIgnoreCase))
+                    return null;
+            }
+
+            return commonClan;
         }
 
         private ulong GetTeamLeaderId(ulong teamId)
@@ -2751,10 +2848,23 @@ namespace Oxide.Plugins
         private string GetTeamLeaderName(ulong teamId)
         {
             var leaderId = GetTeamLeaderId(teamId);
-            if (leaderId == 0UL)
-                return "Unknown";
+            if (leaderId != 0UL)
+                return GetPlayerDisplayName(leaderId);
 
-            return GetPlayerDisplayName(leaderId);
+            var members = GetTeamMembers(teamId);
+            if (members != null && members.Count > 0)
+                return GetPlayerDisplayName(members[0]);
+
+            return "Unknown";
+        }
+
+        private bool HasValidTeamMembers(ulong teamId)
+        {
+            if (teamId == 0UL)
+                return false;
+
+            var members = GetTeamMembers(teamId);
+            return members != null && members.Count > 0;
         }
 
         private string GetPlayerDisplayName(ulong userId)
@@ -3058,6 +3168,9 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Wipe")]
             public WipeSettings Wipe = new WipeSettings();
 
+            [JsonProperty(PropertyName = "Teams")]
+            public TeamSettings Teams = new TeamSettings();
+
             public static PluginConfig CreateDefault()
             {
                 return new PluginConfig();
@@ -3103,6 +3216,12 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "CacheLeaderboardEntries")]
             public int CacheLeaderboardEntries = 50;
+        }
+
+        private class TeamSettings
+        {
+            [JsonProperty(PropertyName = "UseClanTagsInTeamNames (Requires Clans mod)")]
+            public bool UseClanTagsInTeamNames = false;
         }
 
         private class RatingSettings
