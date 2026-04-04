@@ -115,7 +115,6 @@ namespace Oxide.Plugins
             var record = GetOrCreatePlayerRecord(player.userID, player.displayName);
             record.LastKnownName = player.displayName;
             record.IsNpc = player.IsNpc;
-            record.IsNpc = player.IsNpc;
             record.LastSeenUtc = DateTime.UtcNow;
 
             EnsureRuntimeState(player, record);
@@ -130,7 +129,6 @@ namespace Oxide.Plugins
 
             var record = GetOrCreatePlayerRecord(player.userID, player.displayName);
             record.LastKnownName = player.displayName;
-            record.IsNpc = player.IsNpc;
             record.IsNpc = player.IsNpc;
             record.LastSeenUtc = DateTime.UtcNow;
 
@@ -147,7 +145,6 @@ namespace Oxide.Plugins
 
             var record = GetOrCreatePlayerRecord(player.userID, player.displayName);
             record.LastKnownName = player.displayName;
-            record.IsNpc = player.IsNpc;
             record.IsNpc = player.IsNpc;
             record.LastSeenUtc = DateTime.UtcNow;
 
@@ -2370,8 +2367,6 @@ namespace Oxide.Plugins
             if (_config.Wipe == null)
                 _config.Wipe = new WipeSettings();
 
-            if (string.IsNullOrWhiteSpace(_config.General.ChatCommand))
-                _config.General.ChatCommand = "rank";
             if (string.IsNullOrWhiteSpace(_config.General.UiTitle))
                 _config.General.UiTitle = "RustStorm Rank";
             if (string.IsNullOrWhiteSpace(_config.General.ChatCommand))
@@ -2976,7 +2971,8 @@ namespace Oxide.Plugins
 
             [JsonProperty("avatar_url")]
             public string AvatarUrl;
-[JsonProperty("embeds")]
+			
+			[JsonProperty("embeds")]
             public List<DiscordEmbed> Embeds;
         }
 
