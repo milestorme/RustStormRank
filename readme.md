@@ -300,7 +300,7 @@ oxide.grant group admin ruststormrank.admin
 
 ```json
 "Teams": {
-  "UseClanTagsInTeamNames": false
+  "UseClanTagsInTeamNames (Requires Clans mod)": false
 }
 ```
 
