@@ -705,11 +705,11 @@ namespace Oxide.Plugins
             AddCard(container, parent, "Build", stats.ScoreCache.BuildScore.ToString("F1"), "0.585 0.68", "0.755 0.81", "0.33 0.76 1.00 1.00");
             AddCard(container, parent, "Survival", stats.ScoreCache.SurvivalScore.ToString("F1"), "0.77 0.68", "0.94 0.81", "0.33 0.76 1.00 1.00");
 
-            var currentTier = GetRankTier(stats.ScoreCache.OverallScore);
-            var currentTierColor = GetTierColor(currentTier);
+            var playerRank = GetPlayerRank(record.UserId, scope);
+            var rankColor = GetRankDisplayColor(playerRank);
 
             AddLabel(container, parent, $"Player: {record.LastKnownName}", 15, "0.04 0.63", "0.34 0.67", "0.85 0.92 1.00 1.00", TextAnchor.MiddleLeft);
-            AddLabel(container, parent, $"Rank: #{GetPlayerRank(record.UserId, scope)}", 15, "0.35 0.63", "0.50 0.67", currentTierColor, TextAnchor.MiddleLeft);
+            AddLabel(container, parent, $"Rank: #{playerRank}", 15, "0.35 0.63", "0.50 0.67", rankColor, TextAnchor.MiddleLeft);
             AddLabel(container, parent, $"KDR: {GetKdr(stats.PvP):F2}", 15, "0.51 0.63", "0.63 0.67", UiAccentBlue, TextAnchor.MiddleLeft);
             AddLabel(container, parent, $"Played: {FormatDuration(stats.Survival.SecondsPlayed)}", 15, "0.64 0.63", "0.94 0.67", UiAccentGold, TextAnchor.MiddleRight);
         }
@@ -758,7 +758,7 @@ namespace Oxide.Plugins
 
                     AddMiniStat(container, body, "Build Score", stats.ScoreCache.BuildScore.ToString("F1"), "0.04 0.62", "0.31 0.69");
                     AddMiniStat(container, body, "Survival Score", stats.ScoreCache.SurvivalScore.ToString("F1"), "0.365 0.62", "0.635 0.69");
-                    AddMiniStat(container, body, "Rank", "#" + GetPlayerRank(recordUserId, scope), "0.69 0.62", "0.96 0.69");
+                    AddMiniStat(container, body, "Rank", "#" + GetPlayerRank(recordUserId, scope), "0.69 0.62", "0.96 0.69", GetRankDisplayColor(GetPlayerRank(recordUserId, scope)));
 
                     var currentTier = GetRankTier(stats.ScoreCache.OverallScore);
                     var nextTier = GetNextRankTier(stats.ScoreCache.OverallScore);
@@ -1006,7 +1006,7 @@ namespace Oxide.Plugins
             AddLabel(container, card, value, 20, "0.08 0.10", "0.92 0.64", accentColor, TextAnchor.MiddleCenter);
         }
 
-        private void AddMiniStat(CuiElementContainer container, string parent, string label, string value, string min, string max)
+        private void AddMiniStat(CuiElementContainer container, string parent, string label, string value, string min, string max, string valueColorOverride = null)
         {
             var box = container.Add(new CuiPanel
             {
@@ -1014,7 +1014,9 @@ namespace Oxide.Plugins
                 RectTransform = { AnchorMin = min, AnchorMax = max }
             }, parent);
 
-            var valueColor = GetHighlightValueColor(label, value);
+            var valueColor = string.IsNullOrWhiteSpace(valueColorOverride)
+                ? GetHighlightValueColor(label, value)
+                : valueColorOverride;
 
             container.Add(new CuiLabel
             {
@@ -1217,6 +1219,14 @@ namespace Oxide.Plugins
                 case 2: return "0.78 0.56 0.33 1.00";
                 default: return UiAccentGold;
             }
+        }
+
+        private string GetRankDisplayColor(int rank)
+        {
+            if (rank <= 0)
+                return UiTextSoft;
+
+            return GetLeaderboardPlaceColor(rank - 1);
         }
 
         private string GetRankTier(float overallScore)
