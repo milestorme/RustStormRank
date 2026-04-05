@@ -91,8 +91,19 @@ namespace Oxide.Plugins
         private void Unload()
         {
             DestroyTimers();
+            var now = DateTime.UtcNow;
             foreach (var player in BasePlayer.activePlayerList)
+            {
+                if (IsValidPlayer(player))
+                {
+                    var record = GetOrCreatePlayerRecord(player.userID, player.displayName);
+                    RuntimePlayerState state;
+                    if (_runtimeStates.TryGetValue(player.userID, out state))
+                        AccumulatePlayedTime(record, state, now);
+                }
+
                 DestroyUi(player);
+            }
             SaveData();
         }
 
@@ -138,6 +149,10 @@ namespace Oxide.Plugins
             record.LastKnownName = player.displayName;
             record.IsNpc = player.IsNpc;
             record.LastSeenUtc = DateTime.UtcNow;
+
+            RuntimePlayerState state;
+            if (_runtimeStates.TryGetValue(player.userID, out state))
+                AccumulatePlayedTime(record, state, DateTime.UtcNow);
 
             MarkPlayerDirty(player.userID);
             _lastPositionByPlayer.Remove(player.userID);
@@ -388,6 +403,8 @@ namespace Oxide.Plugins
         {
             try
             {
+                var now = DateTime.UtcNow;
+
                 foreach (var player in BasePlayer.activePlayerList)
                 {
                     if (!IsValidPlayer(player))
@@ -397,8 +414,7 @@ namespace Oxide.Plugins
                     record.IsNpc = player.IsNpc;
                     var state = EnsureRuntimeState(player, record);
 
-                    record.CurrentWipe.Survival.SecondsPlayed += _config.Performance.ActivityTickSeconds;
-                    record.Lifetime.Survival.SecondsPlayed += _config.Performance.ActivityTickSeconds;
+                    AccumulatePlayedTime(record, state, now);
 
                     var currentPos = player.transform.position;
                     Vector3 lastPos;
@@ -414,7 +430,7 @@ namespace Oxide.Plugins
 
                     _lastPositionByPlayer[player.userID] = currentPos;
 
-                    var lifeSeconds = (float)(DateTime.UtcNow - state.CurrentLifeStartUtc).TotalSeconds;
+                    var lifeSeconds = (float)(now - state.CurrentLifeStartUtc).TotalSeconds;
                     if (lifeSeconds > record.CurrentWipe.Survival.LongestLifeSeconds)
                         record.CurrentWipe.Survival.LongestLifeSeconds = lifeSeconds;
                     if (lifeSeconds > record.Lifetime.Survival.LongestLifeSeconds)
@@ -430,6 +446,32 @@ namespace Oxide.Plugins
             }
         }
 
+        private void AccumulatePlayedTime(PlayerRecord record, RuntimePlayerState state, DateTime now)
+        {
+            if (record == null || state == null)
+                return;
+
+            if (state.LastActivityUpdateUtc <= DateTime.MinValue)
+            {
+                state.LastActivityUpdateUtc = now;
+                return;
+            }
+
+            var elapsedSeconds = (float)(now - state.LastActivityUpdateUtc).TotalSeconds;
+            if (elapsedSeconds <= 0f)
+            {
+                state.LastActivityUpdateUtc = now;
+                return;
+            }
+
+            if (elapsedSeconds > 86400f)
+                elapsedSeconds = 86400f;
+
+            record.CurrentWipe.Survival.SecondsPlayed += elapsedSeconds;
+            record.Lifetime.Survival.SecondsPlayed += elapsedSeconds;
+            state.LastActivityUpdateUtc = now;
+        }
+
         private RuntimePlayerState EnsureRuntimeState(BasePlayer player, PlayerRecord record = null)
         {
             RuntimePlayerState state;
@@ -442,6 +484,7 @@ namespace Oxide.Plugins
                 state = new RuntimePlayerState
                 {
                     CurrentLifeStartUtc = lifeStartUtc,
+                    LastActivityUpdateUtc = DateTime.UtcNow,
                     LastKnownTeamId = player.currentTeam
                 };
                 _runtimeStates[player.userID] = state;
@@ -461,6 +504,7 @@ namespace Oxide.Plugins
         private void FinalizeLife(BasePlayer player, PlayerRecord record)
         {
             var state = EnsureRuntimeState(player, record);
+            AccumulatePlayedTime(record, state, DateTime.UtcNow);
             var lifeSeconds = (float)(DateTime.UtcNow - state.CurrentLifeStartUtc).TotalSeconds;
 
             if (lifeSeconds > record.CurrentWipe.Survival.LongestLifeSeconds)
@@ -3014,6 +3058,7 @@ namespace Oxide.Plugins
         private class RuntimePlayerState
         {
             public DateTime CurrentLifeStartUtc;
+            public DateTime LastActivityUpdateUtc;
             public ulong LastKnownTeamId;
         }
 
