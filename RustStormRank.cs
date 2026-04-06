@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RustStormRank", "Milestorme", "0.5.5")]
+    [Info("RustStormRank", "Milestorme", "0.5.10")]
     [Description("Low-overhead leaderboard and ranking core for RustStorm with current wipe, lifetime, team scopes, and polished rebuilt clean UI from stable core.")]
     public class RustStormRank : RustPlugin
     {
@@ -191,27 +191,82 @@ namespace Oxide.Plugins
                 if (entity == null || info == null)
                     return;
 
-                var victimPlayer = entity as BasePlayer;
+                var victimEntity = entity;
+                var victimPlayer = victimEntity as BasePlayer;
+                var attackerEntity = info.Initiator as BaseCombatEntity;
                 var attackerPlayer = info.InitiatorPlayer;
 
-                if (!IsValidPlayer(victimPlayer) || !IsValidPlayer(attackerPlayer) || attackerPlayer == victimPlayer)
+                if (attackerEntity == null)
                     return;
 
                 var totalDamage = info.damageTypes != null ? info.damageTypes.Total() : 0f;
                 if (totalDamage <= 0f)
                     return;
 
-                var victimRecord = GetOrCreatePlayerRecord(victimPlayer.userID, victimPlayer.displayName);
-                victimRecord.IsNpc = victimPlayer.IsNpc;
-                victimRecord.CurrentWipe.PvP.DamageTaken += totalDamage;
-                victimRecord.Lifetime.PvP.DamageTaken += totalDamage;
-                MarkPlayerDirty(victimPlayer.userID);
+                if (victimPlayer != null && attackerPlayer != null && attackerPlayer == victimPlayer)
+                    return;
 
-                var attackerRecord = GetOrCreatePlayerRecord(attackerPlayer.userID, attackerPlayer.displayName);
-                attackerRecord.IsNpc = attackerPlayer.IsNpc;
-                attackerRecord.CurrentWipe.PvP.DamageDealt += totalDamage;
-                attackerRecord.Lifetime.PvP.DamageDealt += totalDamage;
-                MarkPlayerDirty(attackerPlayer.userID);
+                var victimIsPlayer = IsValidPlayer(victimPlayer);
+                var attackerIsPlayer = IsValidPlayer(attackerPlayer);
+                var victimIsNpc = victimPlayer != null && victimPlayer.IsNpc;
+                var attackerIsNpc = attackerPlayer != null && attackerPlayer.IsNpc;
+                var victimIsAnimal = IsTrackedAnimal(victimEntity);
+                var attackerIsAnimal = IsTrackedAnimal(attackerEntity);
+
+                if (victimIsPlayer && attackerIsPlayer)
+                {
+                    var victimRecord = GetOrCreatePlayerRecord(victimPlayer.userID, victimPlayer.displayName);
+                    victimRecord.IsNpc = false;
+                    victimRecord.CurrentWipe.PvP.DamageTaken += totalDamage;
+                    victimRecord.Lifetime.PvP.DamageTaken += totalDamage;
+                    MarkPlayerDirty(victimPlayer.userID);
+
+                    var attackerRecord = GetOrCreatePlayerRecord(attackerPlayer.userID, attackerPlayer.displayName);
+                    attackerRecord.IsNpc = false;
+                    attackerRecord.CurrentWipe.PvP.DamageDealt += totalDamage;
+                    attackerRecord.Lifetime.PvP.DamageDealt += totalDamage;
+                    MarkPlayerDirty(attackerPlayer.userID);
+                    return;
+                }
+
+                if (attackerIsPlayer && victimIsNpc)
+                {
+                    var attackerRecord = GetOrCreatePlayerRecord(attackerPlayer.userID, attackerPlayer.displayName);
+                    attackerRecord.IsNpc = false;
+                    attackerRecord.CurrentWipe.Survival.NpcDamageDone += totalDamage;
+                    attackerRecord.Lifetime.Survival.NpcDamageDone += totalDamage;
+                    MarkPlayerDirty(attackerPlayer.userID);
+                    return;
+                }
+
+                if (attackerIsNpc && victimIsPlayer)
+                {
+                    var victimRecord = GetOrCreatePlayerRecord(victimPlayer.userID, victimPlayer.displayName);
+                    victimRecord.IsNpc = false;
+                    victimRecord.CurrentWipe.Survival.NpcDamageTaken += totalDamage;
+                    victimRecord.Lifetime.Survival.NpcDamageTaken += totalDamage;
+                    MarkPlayerDirty(victimPlayer.userID);
+                    return;
+                }
+
+                if (attackerIsPlayer && victimIsAnimal)
+                {
+                    var attackerRecord = GetOrCreatePlayerRecord(attackerPlayer.userID, attackerPlayer.displayName);
+                    attackerRecord.IsNpc = false;
+                    attackerRecord.CurrentWipe.Survival.AnimalDamageDone += totalDamage;
+                    attackerRecord.Lifetime.Survival.AnimalDamageDone += totalDamage;
+                    MarkPlayerDirty(attackerPlayer.userID);
+                    return;
+                }
+
+                if (attackerIsAnimal && victimIsPlayer)
+                {
+                    var victimRecord = GetOrCreatePlayerRecord(victimPlayer.userID, victimPlayer.displayName);
+                    victimRecord.IsNpc = false;
+                    victimRecord.CurrentWipe.Survival.AnimalDamageTaken += totalDamage;
+                    victimRecord.Lifetime.Survival.AnimalDamageTaken += totalDamage;
+                    MarkPlayerDirty(victimPlayer.userID);
+                }
             }
             catch (Exception ex)
             {
@@ -226,14 +281,17 @@ namespace Oxide.Plugins
                 if (entity == null)
                     return;
 
-                var victimPlayer = entity as BasePlayer;
+                var victimEntity = entity;
+                var victimPlayer = victimEntity as BasePlayer;
                 var attackerPlayer = info?.InitiatorPlayer;
                 var isTruePvPDeath = IsValidPlayer(victimPlayer) && IsValidPlayer(attackerPlayer) && attackerPlayer.userID != victimPlayer.userID;
+                var isPlayerKilledNpc = victimPlayer != null && victimPlayer.IsNpc && IsValidPlayer(attackerPlayer) && attackerPlayer.userID != victimPlayer.userID;
+                var isPlayerKilledAnimal = IsTrackedAnimal(victimEntity) && IsValidPlayer(attackerPlayer);
 
                 if (IsValidPlayer(victimPlayer))
                 {
                     var victimRecord = GetOrCreatePlayerRecord(victimPlayer.userID, victimPlayer.displayName);
-                    victimRecord.IsNpc = victimPlayer.IsNpc;
+                    victimRecord.IsNpc = false;
                     victimRecord.CurrentWipe.Survival.Respawns++;
                     victimRecord.Lifetime.Survival.Respawns++;
 
@@ -252,7 +310,7 @@ namespace Oxide.Plugins
                 if (isTruePvPDeath)
                 {
                     var attackerRecord = GetOrCreatePlayerRecord(attackerPlayer.userID, attackerPlayer.displayName);
-                    attackerRecord.IsNpc = attackerPlayer.IsNpc;
+                    attackerRecord.IsNpc = false;
                     attackerRecord.CurrentWipe.PvP.Kills++;
                     attackerRecord.Lifetime.PvP.Kills++;
 
@@ -271,6 +329,26 @@ namespace Oxide.Plugins
                     if (attackerRecord.Lifetime.PvP.KillStreakCurrent > attackerRecord.Lifetime.PvP.KillStreakBest)
                         attackerRecord.Lifetime.PvP.KillStreakBest = attackerRecord.Lifetime.PvP.KillStreakCurrent;
 
+                    MarkPlayerDirty(attackerPlayer.userID);
+                    return;
+                }
+
+                if (isPlayerKilledNpc)
+                {
+                    var attackerRecord = GetOrCreatePlayerRecord(attackerPlayer.userID, attackerPlayer.displayName);
+                    attackerRecord.IsNpc = false;
+                    attackerRecord.CurrentWipe.Survival.NpcsKilled++;
+                    attackerRecord.Lifetime.Survival.NpcsKilled++;
+                    MarkPlayerDirty(attackerPlayer.userID);
+                    return;
+                }
+
+                if (isPlayerKilledAnimal)
+                {
+                    var attackerRecord = GetOrCreatePlayerRecord(attackerPlayer.userID, attackerPlayer.displayName);
+                    attackerRecord.IsNpc = false;
+                    attackerRecord.CurrentWipe.Survival.AnimalsKilled++;
+                    attackerRecord.Lifetime.Survival.AnimalsKilled++;
                     MarkPlayerDirty(attackerPlayer.userID);
                 }
             }
@@ -742,11 +820,13 @@ namespace Oxide.Plugins
             if (scope == RankScope.Team)
             {
                 var teamName = teamRecord != null ? GetTeamDisplayName(teamRecord.TeamId) : "No Team";
-                AddLabel(container, panel, "Viewing: " + teamName, 13, "0.03 0.805", "0.30 0.835", UiAccentGold, TextAnchor.MiddleLeft);
+                AddLabel(container, panel, "Viewing: " + teamName, 13,
+				"0.03 0.805", "0.30 0.845", UiAccentGold, TextAnchor.MiddleLeft);
             }
             else if (normalizedTargetUserId != player.userID)
             {
-                AddLabel(container, panel, "Viewing: " + record.LastKnownName, 13, "0.03 0.805", "0.30 0.835", UiAccentGold, TextAnchor.MiddleLeft);
+				AddLabel(container, panel, "Viewing: " + record.LastKnownName, 13,
+				"0.03 0.805", "0.30 0.845", UiAccentGold, TextAnchor.MiddleLeft);
             }
 
             AddSummaryCards(container, panel, stats, record, scope, teamRecord);
@@ -845,6 +925,8 @@ namespace Oxide.Plugins
                 case "survival":
                     AddStatRow(container, body, 0.78f, "Played", FormatDuration(stats.Survival.SecondsPlayed), "Longest Life", FormatDuration(stats.Survival.LongestLifeSeconds), "Respawns", stats.Survival.Respawns.ToString());
                     AddStatRow(container, body, 0.62f, "Distance", stats.Survival.DistanceTraveled.ToString("F0") + "m", "Survival Score", stats.ScoreCache.SurvivalScore.ToString("F1"), "Scope", GetScopeTitle(scope));
+                    AddStatRow(container, body, 0.46f, "NPCs Killed", stats.Survival.NpcsKilled.ToString(), "NPC Damage Done", stats.Survival.NpcDamageDone.ToString("F0"), "NPC Damage Taken", stats.Survival.NpcDamageTaken.ToString("F0"));
+                    AddStatRow(container, body, 0.30f, "Animals Killed", stats.Survival.AnimalsKilled.ToString(), "Animal Damage Done", stats.Survival.AnimalDamageDone.ToString("F0"), "Animal Damage Taken", stats.Survival.AnimalDamageTaken.ToString("F0"));
                     break;
 
                 default:
@@ -1006,6 +1088,8 @@ namespace Oxide.Plugins
                     RectTransform = { AnchorMin = useTwoColumns ? "0.18 0.08" : "0.14 0.08", AnchorMax = useTwoColumns ? "0.74 0.92" : "0.82 0.92" }
                 }, row);
 
+                var scoreMin = useTwoColumns ? "0.76 0.08" : (scope == RankScope.Team ? "0.70 0.08" : "0.83 0.08");
+                var scoreMax = scope == RankScope.Team ? "0.82 0.92" : "0.96 0.92";
                 container.Add(new CuiLabel
                 {
                     Text =
@@ -1015,20 +1099,41 @@ namespace Oxide.Plugins
                         Align = TextAnchor.MiddleRight,
                         Color = isSelf ? UiAccentGold : UiAccentBlue
                     },
-                    RectTransform = { AnchorMin = useTwoColumns ? "0.76 0.08" : "0.83 0.08", AnchorMax = "0.96 0.92" }
+                    RectTransform = { AnchorMin = scoreMin, AnchorMax = scoreMax }
                 }, row);
 
                 if (scope == RankScope.Team && entry.EntryType == "team")
                 {
+                    var isSelected = entry.Id == targetUserId;
+                    var selectCommand = isSelected ? string.Empty : BuildUiCommand("top", RankScope.Team, player.userID, entry.Id, true);
+                    var viewCommand = BuildUiCommand("overview", RankScope.Team, player.userID, entry.Id, true);
+
                     container.Add(new CuiButton
                     {
                         Button =
                         {
                             Color = "0 0 0 0",
-                            Command = BuildUiCommand("overview", RankScope.Team, player.userID, entry.Id, true)
+                            Command = selectCommand
                         },
-                        RectTransform = { AnchorMin = "0 0", AnchorMax = "1 1" },
+                        RectTransform = { AnchorMin = "0 0", AnchorMax = "0.83 1" },
                         Text = { Text = string.Empty, FontSize = 1, Align = TextAnchor.MiddleCenter, Color = "0 0 0 0" }
+                    }, row);
+
+                    container.Add(new CuiButton
+                    {
+                        Button =
+                        {
+                            Color = isSelected ? "0.24 0.47 0.72 0.98" : "0.08 0.12 0.22 0.94",
+                            Command = viewCommand
+                        },
+                        RectTransform = { AnchorMin = "0.84 0.12", AnchorMax = "0.96 0.88" },
+                        Text =
+                        {
+                            Text = isSelected ? "Viewing" : "View",
+                            FontSize = 12,
+                            Align = TextAnchor.MiddleCenter,
+                            Color = UiTextPrimary
+                        }
                     }, row);
                 }
                 else if (scope != RankScope.Team && entry.EntryType == "player")
@@ -1378,6 +1483,26 @@ namespace Oxide.Plugins
             if (overallScore >= 30f) return ((overallScore - 30f) / 15f) * 100f;
             if (overallScore >= 15f) return ((overallScore - 15f) / 15f) * 100f;
             return (overallScore / 15f) * 100f;
+        }
+
+        private bool IsTrackedAnimal(BaseCombatEntity entity)
+        {
+            if (entity == null)
+                return false;
+
+            var shortName = entity.ShortPrefabName;
+            if (string.IsNullOrEmpty(shortName))
+                return false;
+
+            shortName = shortName.ToLowerInvariant();
+            return shortName.Contains("bear") ||
+                   shortName.Contains("polarbear") ||
+                   shortName.Contains("wolf") ||
+                   shortName.Contains("boar") ||
+                   shortName.Contains("stag") ||
+                   shortName.Contains("deer") ||
+                   shortName.Contains("chicken") ||
+                   shortName.Contains("horse");
         }
 
         private void AddStatRow(CuiElementContainer container, string parent, float y, string label1, string value1, string label2, string value2, string label3, string value3)
@@ -1819,13 +1944,25 @@ namespace Oxide.Plugins
                     RectTransform = { AnchorMin = "0.69 0.08", AnchorMax = "0.82 0.92" }
                 }, row);
 
-                var command = isSelected ? string.Empty : BuildUiCommand("overview", scope, viewer.userID, entry.Id, true);
+                var selectCommand = isSelected ? string.Empty : BuildUiCommand("players", scope, viewer.userID, entry.Id, true);
+                var viewCommand = isSelected ? string.Empty : BuildUiCommand("overview", scope, viewer.userID, entry.Id, true);
+                container.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Color = "0 0 0 0",
+                        Command = selectCommand
+                    },
+                    RectTransform = { AnchorMin = "0 0", AnchorMax = "0.83 1" },
+                    Text = { Text = string.Empty, FontSize = 1, Align = TextAnchor.MiddleCenter, Color = "0 0 0 0" }
+                }, row);
+
                 container.Add(new CuiButton
                 {
                     Button =
                     {
                         Color = isSelected ? "0.24 0.47 0.72 0.98" : "0.08 0.12 0.22 0.94",
-                        Command = command
+                        Command = viewCommand
                     },
                     RectTransform = { AnchorMin = "0.84 0.12", AnchorMax = "0.96 0.88" },
                     Text =
@@ -1931,24 +2068,63 @@ namespace Oxide.Plugins
         {
             var memberScores = new List<float>();
             var teamworkBonus = 0f;
+            var target = scope == RankScope.Lifetime ? teamRecord.Lifetime : teamRecord.CurrentWipe;
+
+            target.PvP = new PvPStats();
+            target.Farm = new FarmStats();
+            target.Build = new BuildStats();
+            target.Survival = new SurvivalStats();
+            target.Support = new SupportStats();
+            target.ScoreCache = new ScoreCache();
 
             foreach (var userId in teamRecord.MemberUserIds)
             {
                 PlayerRecord record;
-                if (!_data.Players.TryGetValue(userId, out record))
+                if (!_data.Players.TryGetValue(userId, out record) || IsNpcRecord(record))
                     continue;
 
                 var stats = GetScopeStats(record, scope);
                 memberScores.Add(stats.ScoreCache.OverallScore);
                 teamworkBonus += stats.Support.TeamContributions;
+
+                target.PvP.Kills += stats.PvP.Kills;
+                target.PvP.Deaths += stats.PvP.Deaths;
+                target.PvP.Headshots += stats.PvP.Headshots;
+                target.PvP.DamageDealt += stats.PvP.DamageDealt;
+                target.PvP.DamageTaken += stats.PvP.DamageTaken;
+                target.PvP.KillStreakCurrent += stats.PvP.KillStreakCurrent;
+                target.PvP.KillStreakBest = Mathf.Max(target.PvP.KillStreakBest, stats.PvP.KillStreakBest);
+
+                target.Farm.WoodGathered += stats.Farm.WoodGathered;
+                target.Farm.StoneGathered += stats.Farm.StoneGathered;
+                target.Farm.MetalGathered += stats.Farm.MetalGathered;
+                target.Farm.SulfurGathered += stats.Farm.SulfurGathered;
+                target.Farm.NodesHarvested += stats.Farm.NodesHarvested;
+
+                target.Build.StructuresBuilt += stats.Build.StructuresBuilt;
+                target.Build.StructuresUpgraded += stats.Build.StructuresUpgraded;
+                target.Build.RepairsPerformed += stats.Build.RepairsPerformed;
+
+                target.Survival.SecondsPlayed += stats.Survival.SecondsPlayed;
+                target.Survival.DistanceTraveled += stats.Survival.DistanceTraveled;
+                target.Survival.Respawns += stats.Survival.Respawns;
+                target.Survival.NpcsKilled += stats.Survival.NpcsKilled;
+                target.Survival.NpcDamageDone += stats.Survival.NpcDamageDone;
+                target.Survival.NpcDamageTaken += stats.Survival.NpcDamageTaken;
+                target.Survival.AnimalsKilled += stats.Survival.AnimalsKilled;
+                target.Survival.AnimalDamageDone += stats.Survival.AnimalDamageDone;
+                target.Survival.AnimalDamageTaken += stats.Survival.AnimalDamageTaken;
+                target.Survival.LongestLifeSeconds = Mathf.Max(target.Survival.LongestLifeSeconds, stats.Survival.LongestLifeSeconds);
+
+                target.Support.TeamContributions += stats.Support.TeamContributions;
             }
 
-            var target = scope == RankScope.Lifetime ? teamRecord.Lifetime : teamRecord.CurrentWipe;
             if (memberScores.Count == 0)
             {
-                target.ScoreCache.TeamScore = 0f;
                 return;
             }
+
+            CalculateScopeScores(target);
 
             memberScores.Sort((a, b) => b.CompareTo(a));
 
@@ -3132,6 +3308,12 @@ namespace Oxide.Plugins
             public float LongestLifeSeconds;
             public float DistanceTraveled;
             public int Respawns;
+            public int NpcsKilled;
+            public float NpcDamageDone;
+            public float NpcDamageTaken;
+            public int AnimalsKilled;
+            public float AnimalDamageDone;
+            public float AnimalDamageTaken;
         }
 
         private class SupportStats
