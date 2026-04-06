@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RustStormRank", "Milestorme", "0.5.10")]
+    [Info("RustStormRank", "Milestorme", "0.5.13")]
     [Description("Low-overhead leaderboard and ranking core for RustStorm with current wipe, lifetime, team scopes, and polished rebuilt clean UI from stable core.")]
     public class RustStormRank : RustPlugin
     {
@@ -808,10 +808,17 @@ namespace Oxide.Plugins
             AddButton(container, panel, "Top", BuildUiCommand("top", scope, player.userID, tabTargetId), "0.60 0.84", "0.69 0.89", false, page == "top");
             AddButton(container, panel, "Lifetime", scope == RankScope.Lifetime ? BuildUiCommand("overview", RankScope.CurrentWipe, player.userID, normalizedTargetUserId) : BuildUiCommand("overview", RankScope.Lifetime, player.userID, normalizedTargetUserId), "0.70 0.84", "0.79 0.89", false, scope == RankScope.Lifetime);
 
-            if (scope != RankScope.Team)
+            if (scope == RankScope.Team)
+            {
+                if (teamId != 0UL && HasValidTeamMembers(teamId))
+                    AddButton(container, panel, "Members", "ruststormrank.playerspage 0 " + ScopeToArg(scope) + " " + teamId, "0.80 0.84", "0.89 0.89", false, page == "players");
+            }
+            else
+            {
                 AddButton(container, panel, "Players", "ruststormrank.playerspage 0 " + ScopeToArg(scope) + " " + normalizedTargetUserId, "0.80 0.84", "0.89 0.89", false, page == "players");
+            }
 
-            AddButton(container, panel, "Teams", scope == RankScope.Team ? BuildUiCommand("overview", RankScope.CurrentWipe, player.userID, player.userID) : BuildUiCommand("top", RankScope.Team, player.userID, 0UL), "0.90 0.84", "0.98 0.89", false, scope == RankScope.Team);
+            AddButton(container, panel, "Teams", scope == RankScope.Team ? BuildUiCommand("top", RankScope.Team, player.userID, teamId, true) : BuildUiCommand("top", RankScope.Team, player.userID, 0UL), "0.90 0.84", "0.98 0.89", false, scope == RankScope.Team);
 
             AddButton(container, panel, "Close", "ruststormrank.close", "0.89 0.925", "0.97 0.975", true);
 
@@ -833,8 +840,13 @@ namespace Oxide.Plugins
 
             if (page == "top")
                 AddLeaderboardSection(container, panel, player, scope, scope == RankScope.Team ? teamId : normalizedTargetUserId);
-            else if (page == "players" && scope != RankScope.Team)
-                AddPlayersSection(container, panel, player, scope, normalizedTargetUserId);
+            else if (page == "players")
+            {
+                if (scope == RankScope.Team)
+                    AddTeamMembersSection(container, panel, player, teamId);
+                else
+                    AddPlayersSection(container, panel, player, scope, normalizedTargetUserId);
+            }
             else
                 AddStatsSection(container, panel, stats, scope, page, scope == RankScope.Team ? teamId : record.UserId);
 
@@ -1985,6 +1997,116 @@ namespace Oxide.Plugins
         }
 
 
+        private void AddTeamMembersSection(CuiElementContainer container, string parent, BasePlayer viewer, ulong teamId)
+        {
+            var body = container.Add(new CuiPanel
+            {
+                Image = { Color = UiBgPanel },
+                RectTransform = { AnchorMin = "0.03 0.04", AnchorMax = "0.97 0.60" }
+            }, parent);
+
+            AddLabel(container, body, "Team Members", 19, "0.03 0.90", "0.97 0.98", UiTextPrimary, TextAnchor.MiddleLeft);
+            AddLabel(container, body, "Roster for the selected team. Click View to open a full player profile.", 14, "0.03 0.84", "0.97 0.90", UiTextMuted, TextAnchor.MiddleLeft);
+
+            var entries = GetSelectableTeamMembers(teamId);
+            if (entries.Count == 0)
+            {
+                AddDivider(container, body, "0.05 0.775", "0.95 0.779");
+                AddLabel(container, body, "Select a team from Top to view its roster.", 17, "0.05 0.45", "0.95 0.60", UiTextSoft, TextAnchor.MiddleCenter);
+                return;
+            }
+
+            var cardCount = Mathf.Max(1, Mathf.Min(3, entries.Count));
+            var gap = 0.02f;
+            var usableWidth = 0.91f;
+            var cardWidth = (usableWidth - (gap * (cardCount - 1))) / cardCount;
+            var xStart = 0.045f;
+
+            for (var i = 0; i < cardCount; i++)
+            {
+                var localIndex = i;
+                var entry = entries[i];
+                var xMin = xStart + (localIndex * (cardWidth + gap));
+                var xMax = xMin + cardWidth;
+                var card = container.Add(new CuiPanel
+                {
+                    Image = { Color = i % 2 == 0 ? UiBgCard : UiBgRow },
+                    RectTransform =
+                    {
+                        AnchorMin = xMin.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " 0.18",
+                        AnchorMax = xMax.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) + " 0.76"
+                    }
+                }, body);
+
+                var rankColor = GetLeaderboardPlaceColor(i);
+                container.Add(new CuiPanel
+                {
+                    Image = { Color = rankColor },
+                    RectTransform = { AnchorMin = "0.00 0.00", AnchorMax = "0.016 1.00" }
+                }, card);
+
+                AddLabel(container, card, "#" + (i + 1), 20, "0.05 0.76", "0.22 0.95", rankColor, TextAnchor.MiddleLeft);
+                AddLabel(container, card, entry.DisplayName, 16, "0.08 0.54", "0.92 0.78", UiTextPrimary, TextAnchor.MiddleLeft);
+                AddLabel(container, card, "Team Rank", 12, "0.08 0.38", "0.42 0.52", UiTextMuted, TextAnchor.MiddleLeft);
+                AddLabel(container, card, "#" + (i + 1), 14, "0.60 0.38", "0.92 0.52", rankColor, TextAnchor.MiddleRight);
+                AddLabel(container, card, "Score", 12, "0.08 0.24", "0.42 0.38", UiTextMuted, TextAnchor.MiddleLeft);
+                AddLabel(container, card, entry.Score.ToString("F1"), 14, "0.60 0.24", "0.92 0.38", UiAccentBlue, TextAnchor.MiddleRight);
+
+                container.Add(new CuiButton
+                {
+                    Button =
+                    {
+                        Color = "0.08 0.12 0.22 0.94",
+                        Command = BuildUiCommand("overview", RankScope.CurrentWipe, viewer.userID, entry.Id, true)
+                    },
+                    RectTransform = { AnchorMin = "0.08 0.06", AnchorMax = "0.92 0.18" },
+                    Text =
+                    {
+                        Text = "View",
+                        FontSize = 12,
+                        Align = TextAnchor.MiddleCenter,
+                        Color = UiTextPrimary
+                    }
+                }, card);
+            }
+
+        }
+
+        private List<LeaderboardEntry> GetSelectableTeamMembers(ulong teamId)
+        {
+            var entries = new List<LeaderboardEntry>();
+            var members = GetTeamMembers(teamId);
+            if (members == null || members.Count == 0)
+                return entries;
+
+            foreach (var userId in members)
+            {
+                PlayerRecord record;
+                if (!_data.Players.TryGetValue(userId, out record) || IsNpcRecord(record))
+                    continue;
+
+                var stats = GetScopeStats(record, RankScope.CurrentWipe);
+                entries.Add(new LeaderboardEntry
+                {
+                    Id = userId,
+                    DisplayName = record.LastKnownName,
+                    Score = stats.ScoreCache.OverallScore,
+                    EntryType = "player"
+                });
+            }
+
+            entries.Sort((a, b) =>
+            {
+                var byScore = b.Score.CompareTo(a.Score);
+                if (byScore != 0)
+                    return byScore;
+
+                return string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase);
+            });
+
+            return entries;
+        }
+
         private List<LeaderboardEntry> GetSelectablePlayers(RankScope scope)
         {
             var key = GetLeaderboardCacheKey(scope == RankScope.Team ? RankScope.CurrentWipe : scope, "overall");
@@ -2916,7 +3038,7 @@ namespace Oxide.Plugins
                 case "top":
                     return "Top Rankings • " + GetScopeTitle(scope);
                 case "players":
-                    return "Players • " + GetScopeTitle(scope);
+                    return scope == RankScope.Team ? "Members • " + GetScopeTitle(scope) : "Players • " + GetScopeTitle(scope);
                 default:
                     return "Overview • " + GetScopeTitle(scope);
             }
