@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("RustStormRank", "Milestorme", "0.5.13")]
+    [Info("RustStormRank", "Milestorme", "0.5.14")]
     [Description("Low-overhead leaderboard and ranking core for RustStorm with current wipe, lifetime, team scopes, and polished rebuilt clean UI from stable core.")]
     public class RustStormRank : RustPlugin
     {
@@ -818,7 +818,18 @@ namespace Oxide.Plugins
                 AddButton(container, panel, "Players", "ruststormrank.playerspage 0 " + ScopeToArg(scope) + " " + normalizedTargetUserId, "0.80 0.84", "0.89 0.89", false, page == "players");
             }
 
-            AddButton(container, panel, "Teams", scope == RankScope.Team ? BuildUiCommand("top", RankScope.Team, player.userID, teamId, true) : BuildUiCommand("top", RankScope.Team, player.userID, 0UL), "0.90 0.84", "0.98 0.89", false, scope == RankScope.Team);
+				AddButton(
+				container,
+				panel,
+				"Teams",
+				scope == RankScope.Team
+					? "ruststormrank.playerspage 0 " + ScopeToArg(RankScope.CurrentWipe) + " " + player.userID
+					: BuildUiCommand("top", RankScope.Team, player.userID, 0UL),
+				"0.90 0.84",
+				"0.98 0.89",
+				false,
+				scope == RankScope.Team
+			);
 
             AddButton(container, panel, "Close", "ruststormrank.close", "0.89 0.925", "0.97 0.975", true);
 
